@@ -9,7 +9,8 @@ export default defineConfig({
       registerType: 'prompt', // never reload under a playing child; new version applies on next launch
       injectRegister: false,
       workbox: {
-        globPatterns: ['**/*.{js,css,html,webp,png,svg,woff2,txt,webmanifest}'],
+        globPatterns: ['**/*.{js,css,html,webp,png,svg,woff2,txt,webmanifest,mp3,json}'],
+        maximumFileSizeToCacheInBytes: 3_000_000,
         navigateFallback: 'index.html',
         cleanupOutdatedCaches: true,
       },

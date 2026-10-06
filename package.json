@@ -8,7 +8,11 @@
     "icons": "node scripts/make-icons.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173 --strictPort",
-    "test": "playwright test"
+    "test": "playwright test",
+    "audio:gen": "node scripts/generate-audio.ts",
+    "audio:regen": "node scripts/generate-audio.ts",
+    "audio:normalize": "node scripts/generate-audio.ts --normalize",
+    "audio:cer": "python3 scripts/cer-check.py"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

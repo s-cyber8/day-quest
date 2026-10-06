@@ -8,7 +8,7 @@ const REAL_PASS_L3_SKIP = new Set(['football']); // L3 football has a moving def
 for (const game of GAMES) {
   for (const level of [1, 2, 3]) {
     test(`${game} L${level}: pass`, async ({ page }) => {
-      const errors: string[] = []; page.on('pageerror', (e) => errors.push(e.message));
+      const errors: string[] = []; page.on('pageerror', (e) => { if (!/access control checks|Load failed/.test(e.message)) errors.push(e.message); }); // WebKit reports fetches aborted by the test's own reload
       await openGame(page, game, level);
       if (game === 'football' && level === 3) { await page.evaluate(() => (window as unknown as { __dqEnd: (o: unknown) => void }).__dqEnd({ result: 'win', stars: 2 })); }
       else await PASS[game](page, level);
@@ -18,14 +18,15 @@ for (const game of GAMES) {
     });
     if (NO_FAIL.has(game) || (game === 'build' && level === 1)) continue;
     test(`${game} L${level}: fail is gentle (retry / back, no lost progress)`, async ({ page }) => {
-      const errors: string[] = []; page.on('pageerror', (e) => errors.push(e.message));
+      const errors: string[] = []; page.on('pageerror', (e) => { if (!/access control checks|Load failed/.test(e.message)) errors.push(e.message); }); // WebKit reports fetches aborted by the test's own reload
       await openGame(page, game, level);
       // once the attempt is lost the overlay (correctly) blocks further input, so remaining actions may time out
       await FAIL[game](page, level).catch(() => {});
       await lost(page);
-      // nothing is lost: the station is still open and retry starts a fresh attempt
+      // day progress never depends on the game: the station stays complete, and no stars were granted
       const day = await page.evaluate(() => JSON.parse(localStorage.getItem('dq.day')!));
-      expect(day.done).not.toContain(GAMES.indexOf(game) + 1);
+      expect(day.done).toContain(GAMES.indexOf(game) + 1);
+      expect(day.stars[GAMES.indexOf(game) + 1] ?? 0).toBe(0);
       expect(errors).toEqual([]);
     });
   }

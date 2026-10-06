@@ -50,7 +50,7 @@ export async function openGame(page: Page, game: string, level: number, extra: {
   const id = stationOf(game);
   await page.evaluate(([game, level, id, prog]) => {
     const day = JSON.parse(localStorage.getItem('dq.day') || '{}');
-    day.done = Array.from({ length: (id as number) - 1 }, (_, i) => i + 1);
+    day.done = Array.from({ length: id as number }, (_, i) => i + 1); // station already complete: the node replays the game for stars
     day.confirmed = Array.from({ length: id as number }, (_, i) => i + 1); day.night = false; day.skipped = []; day.stars = {};
     localStorage.setItem('dq.day', JSON.stringify(day));
     const st = JSON.parse(localStorage.getItem('dq.settings') || '{}'); st.startLevel = { [game as string]: level }; localStorage.setItem('dq.settings', JSON.stringify(st));

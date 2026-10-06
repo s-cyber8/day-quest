@@ -98,6 +98,14 @@ export async function speak(...parts: string[]): Promise<void> {
   }
 }
 
+/** Parent mode: play the bundled (ElevenLabs) clip itself, regardless of any parent recording. */
+export async function playBundled(id: string): Promise<boolean> {
+  unlockAudio(); stopSpeaking();
+  const b = await bundledBuffer(id);
+  if (!b) return false;
+  setMode('bundled'); await play(b); return true;
+}
+
 /** Parent-mode "test sound": plays one bundled clip (if any), one SFX, reports which speech path was used. */
 export async function testSound(): Promise<string> {
   unlockAudio();

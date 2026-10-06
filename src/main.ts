@@ -12,14 +12,14 @@ import { installRageDetector, onFrustration, setFrustrationEnabled, setGuard, tr
 import { setBase, goBack, onBackVisible } from './core/back';
 import { setWake } from './core/wake';
 import { initCaption, stationCard, holdButton, confetti, askGate, hideCaption } from './screens/ui';
-import { renderMap, currentStation, nextAfter } from './screens/map';
+import { renderMap, nextAfter, visibleStations } from './screens/map';
 import { renderNight } from './screens/night';
 import { renderSticker } from './screens/sticker';
 import { renderParent } from './screens/parent';
 import { offerCalm, openCalm } from './screens/calm';
 import { GAMES } from './games';
 import { createCtx, Level, Outcome } from './games/engine';
-import { text, PHRASES } from './content/phrases';
+import { text, PHRASES, PHRASE_IDS } from './content/phrases';
 
 const app = document.getElementById('app')!;
 let calmOpen = false;
@@ -93,9 +93,13 @@ async function runStation(s: Station) {
   const my: Flow = (flow = { cancelled: false });
   const alive = () => !my.cancelled;
   const nxt = nextAfter(s);
-  preload([s.announce, s.go, s.labelId, ...(nxt ? [nxt.labelId] : []), 'next.prefix', 'done.cheer']);
+  // decode this station's lines (and the shared praise / retry lines) ahead of time so speech starts instantly
+  preload([s.announce, s.go, s.labelId, ...(nxt ? [nxt.labelId] : []), 'next.prefix', 'done.cheer', 'game.intro', 'lvl.up', 'star.1', 'star.2', 'star.3',
+    ...PHRASE_IDS.filter((i) => i.startsWith(`g.${s.id}.`) || i.startsWith('praise.') || i.startsWith('retry.')), ...(nxt ? [nxt.announce] : [])]);
 
-  if (!day.confirmed.includes(s.id)) {
+  // The real-life task + parent confirm completes the station. The game only earns stars and can be left at any time.
+  const replay = day.done.includes(s.id);
+  if (!replay) {
     // a. announce
     const go = h('button', { class: 'bigbtn', 'data-testid': 'go', 'aria-label': 'מתחילים' }, frag(P.play()), h('span', {}, 'יאללה'));
     const announce = h('div', { class: 'screen announce', 'data-screen': 'announce', 'data-station': String(s.id) },
@@ -115,21 +119,21 @@ async function runStation(s: Station) {
       speak(s.go);
     });
     if (!alive()) return;
-    day.confirmed.push(s.id); saveDay();
+    day.done.push(s.id); day.confirmed.push(s.id); saveDay();
     logStation(s.id);
     await celebrate({ title: text('done.cheer'), ms: 3800, speakIds: ['done.cheer'] }, my);
     if (!alive()) return;
   } else { speak('game.intro'); }
 
-  // game: levels, real wins and losses
+  // optional game: levels, real wins and losses (never blocks the day)
   const res = await gameLoop(s, my);
   if (!alive() || !res) return;
-  if (!day.done.includes(s.id)) day.done.push(s.id);
   day.stars[s.id] = Math.max(day.stars[s.id] ?? 0, res.stars); saveDay();
   await celebrate({ title: text('game.end'), ms: 4200, speakIds: [], stars: res.stars, levelUp: res.levelUp }, my);
   if (!alive()) return;
-  if (!currentStation()) { showNight(true); return; }
-  showMap(s);
+  const last = visibleStations().at(-1);
+  if (last && last.id === s.id) { showNight(true); return; } // winning the bedtime game starts Night Mode
+  showMap(replay ? undefined : s);
 }
 
 function celebrate(o: { title: string; ms: number; speakIds: string[]; stars?: number; levelUp?: boolean }, my: Flow): Promise<void> {

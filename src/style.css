@@ -305,3 +305,4 @@ body[data-view=godo] #caption { display: none; }
   .godo .hint { font-size: 18px; }
   .hold { width: 104px; height: 104px; }
 }
+.node .star.nostars .sn { color: #2f7a52; }

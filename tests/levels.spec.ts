@@ -50,14 +50,27 @@ test('break offer -> yes goes to the calm corner and is logged as "fails"', asyn
   expect(log[0].calm[0].source).toBe('fails');
 });
 
-test('back button: game -> map keeps the station open and re-entering skips straight to the game', async ({ page }) => {
+test('leaving a game returns to the map with the station already complete; it can be replayed for stars', async ({ page }) => {
   await openGame(page, 'dress', 2);
   await page.getByTestId('back').click(); await adv(page, 800);
   await expect(page.locator('[data-screen=map]')).toBeVisible();
   const day = await page.evaluate(() => JSON.parse(localStorage.getItem('dq.day')!));
-  expect(day.done).not.toContain(3); expect(day.confirmed).toContain(3);
+  expect(day.done).toContain(3);
+  await expect(page.getByTestId('node-3').locator('.star')).toBeVisible();
   await page.getByTestId('node-3').click(); await adv(page, 1500);
   await expect(page.locator('[data-game=dress]')).toBeVisible();
+});
+
+test('real flow: confirm completes the station even if the game is abandoned; day moves on', async ({ page }) => {
+  await newApp(page);
+  await page.getByTestId('node-1').click(); await page.getByTestId('go').click(); await adv(page, 800);
+  await hold(page, page.getByTestId('hold')); await adv(page, 4500);
+  await expect(page.locator('[data-game=wake]')).toBeVisible();
+  await page.getByTestId('back').click(); await adv(page, 800);
+  await expect(page.locator('[data-screen=map]')).toBeVisible();
+  const day = await page.evaluate(() => JSON.parse(localStorage.getItem('dq.day')!));
+  expect(day.done).toEqual([1]); expect(day.stars['1'] ?? 0).toBe(0);
+  await expect(page.getByTestId('node-2')).toHaveClass(/current/);
 });
 
 test('wake lock is requested during a station and released on the map', async ({ page }) => {

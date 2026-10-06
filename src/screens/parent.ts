@@ -3,7 +3,7 @@ import { PHRASES, PHRASE_IDS } from '../content/phrases';
 import { STATIONS, stationById } from '../content/stations';
 import { settings, saveSettings, day, saveDay, loadLog, resetToday, resetEverything, recPut, recDel, recKeys, recGet, Rec } from '../core/storage';
 import { applyVolume, sfx } from '../core/audio';
-import { speak, stopSpeaking, hasHebrewVoice, testSound, dropRecordingCache } from '../core/speech';
+import { speak, stopSpeaking, hasHebrewVoice, testSound, dropRecordingCache, playBundled } from '../core/speech';
 import { resetProg, getProg } from '../core/storage';
 import { currentStation } from './map';
 
@@ -122,8 +122,9 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
         } catch { recBtn.textContent = 'אין הרשאת מיקרופון'; }
       };
       const play = h('button', { onclick: () => speak(id), 'data-testid': 'play-' + id }, 'השמע');
+      const orig = h('button', { onclick: () => playBundled(id), 'data-testid': 'orig-' + id }, 'מקורי');
       const del = h('button', { onclick: async () => { await recDel(id); dropRecordingCache(id); renderPhrases(); } }, 'מחק');
-      phrases.append(h('div', { class: 'phr' }, h('div', { class: 'tx' }, (has ? '● ' : '') + (ph.speaker === 'moka' ? '[מוקה] ' : '') + ph.text), h('div', { class: 'acts' }, recBtn, play, has ? del : null)));
+      phrases.append(h('div', { class: 'phr' }, h('div', { class: 'tx' }, (has ? '● ' : '') + (ph.speaker === 'moka' ? '[מוקה] ' : '') + ph.text), h('div', { class: 'acts' }, orig, recBtn, play, has ? del : null)));
     }
   };
   renderPhrases(); void recGet;

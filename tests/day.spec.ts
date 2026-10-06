@@ -170,26 +170,31 @@ test('parent mode: gate, PIN, weekday stations, voice recording + playback prior
   await page.getByTestId('parent-close').click();
 });
 
-test('speech: no Hebrew voice -> caption + chime; Hebrew voice -> tts', async ({ page }) => {
-  await page.addInitScript(() => {
-    const w = window as unknown as { __v: string };
-    Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
-      getVoices: () => (w.__v === 'he' ? [{ lang: 'he-IL', name: 'Fake' }] : []),
-      speak: (u: { onend?: () => void; text: string }) => { const w2 = window as unknown as { __said?: string[] }; (w2.__said ||= []).push(u.text); setTimeout(() => u.onend?.(), 5); },
-      cancel() {}, addEventListener() {},
-    } });
+test.describe('speech fallbacks', () => {
+  test.use({ serviceWorkers: 'block' }); // the SW would otherwise serve the manifest from its precache
+  test('speech: no Hebrew voice -> caption + chime; Hebrew voice -> tts (bundled clips disabled to exercise the fallbacks)', async ({ page }) => {
+    await page.route('**/audio/manifest.json', (r) => r.abort());
+    await page.addInitScript(() => {
+      const w = window as unknown as { __v: string };
+      Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: {
+        getVoices: () => (w.__v === 'he' ? [{ lang: 'he-IL', name: 'Fake' }] : []),
+        speak: (u: { onend?: () => void; text: string }) => { const w2 = window as unknown as { __said?: string[] }; (w2.__said ||= []).push(u.text); setTimeout(() => u.onend?.(), 5); },
+        cancel() {}, addEventListener() {},
+      } });
+    });
+    await page.goto('./');
+    await page.waitForTimeout(800);
+    await page.getByTestId('node-1').click();
+    await page.waitForTimeout(500);
+    expect(await page.evaluate(() => document.body.dataset.speech)).toBe('chime');
+    await expect(page.locator('#caption')).toHaveClass(/show/);
+    await page.evaluate(() => { (window as unknown as { __v: string }).__v = 'he'; });
+    await page.reload();
+    await page.evaluate(() => { (window as unknown as { __v: string }).__v = 'he'; });
+    await page.getByTestId('node-1').click();
+    await page.waitForTimeout(600);
+    expect(await page.evaluate(() => document.body.dataset.speech)).toBe('tts');
+    expect((await page.evaluate(() => (window as unknown as { __said: string[] }).__said)).join('|')).toContain('רפאל');
   });
-  await page.goto('./');
-  await page.waitForTimeout(800);
-  await page.getByTestId('node-1').click();
-  await page.waitForTimeout(500);
-  expect(await page.evaluate(() => document.body.dataset.speech)).toBe('chime');
-  await expect(page.locator('#caption')).toHaveClass(/show/);
-  await page.evaluate(() => { (window as unknown as { __v: string }).__v = 'he'; });
-  await page.reload();
-  await page.evaluate(() => { (window as unknown as { __v: string }).__v = 'he'; });
-  await page.getByTestId('node-1').click();
-  await page.waitForTimeout(600);
-  expect(await page.evaluate(() => document.body.dataset.speech)).toBe('tts');
-  expect((await page.evaluate(() => (window as unknown as { __said: string[] }).__said)).join('|')).toContain('רפאל');
+  
 });

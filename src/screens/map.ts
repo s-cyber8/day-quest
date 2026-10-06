@@ -35,8 +35,12 @@ export function renderMap(hooks: MapHooks, from?: Station): HTMLElement {
     const done = day.done.includes(s.id), isCur = cur?.id === s.id;
     const n = h('button', { class: 'node' + (isCur ? ' current' : done ? '' : ' future'), 'data-testid': 'node-' + s.id, 'aria-label': s.label, style: `left:${pos[i].x}%;top:${pos[i].y}px` },
       h('img', { class: 'thumb', src: imgOf(s), alt: '', draggable: 'false' }), h('div', { class: 'num' }, String(s.id)));
-    if (done) { const sw = h('div', { class: 'star' }, frag(P.star()), h('span', { class: 'sn' }, String(day.stars[s.id] ?? 1))); n.append(sw); }
-    if (isCur) { n.dataset.t = '1'; n.addEventListener('click', () => { sfx.tap(); hooks.onStation(s); }); }
+    if (done) {
+      const st = day.stars[s.id] ?? 0;
+      const sw = h('div', { class: 'star' + (st ? '' : ' nostars'), 'data-stars': String(st) }, frag(P.star(st ? '#ffd966' : '#c9e8d4')), h('span', { class: 'sn' }, st ? String(st) : '✓'));
+      n.append(sw);
+    }
+    if (isCur || done) { n.dataset.t = '1'; n.addEventListener('click', () => { sfx.tap(); hooks.onStation(s); }); } // done stations: replay the game for stars
     inner.append(n);
   });
   // hero + Moka
@@ -52,7 +56,7 @@ export function renderMap(hooks: MapHooks, from?: Station): HTMLElement {
   inner.append(buddy, hero);
   place(fromIdx >= 0 ? fromIdx : idx);
 
-  const stars = day.done.reduce((a, id) => a + (day.stars[id] ?? 1), 0);
+  const stars = day.done.reduce((a, id) => a + (day.stars[id] ?? 0), 0);
   const medals = h('div', { class: 'medals', 'data-testid': 'medals' }, ...day.medals.slice(-5).map(() => frag(P.medal())));
   const starsEl = h('div', { class: 'stars', 'data-testid': 'stars', id: 'starcounter' }, frag(P.star()), h('span', {}, `${stars}`));
   const scroll = h('div', { class: 'mapscroll' }, inner);
