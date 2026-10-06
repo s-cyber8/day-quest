@@ -10,14 +10,17 @@ export interface Settings {
   cooldownMin: number;
   reducedMotion: boolean;
   days: Record<number, number[]>; // weekday (0=Sun) -> active station ids
+  startLevel: Record<string, number>; // game key -> 1..3 (default 2)
 }
 export interface CalmVisit {
-  t: number; auto: boolean; activity: string; before: string; after: string; medal: boolean;
+  t: number; auto: boolean; activity: string; before?: string; after: string; medal: boolean; source?: 'rage' | 'misses' | 'fails' | 'self';
 }
 export interface Medal { id: string; activity: string; t: number }
 export interface DayState {
   key: string;
   done: number[];
+  confirmed: number[]; // real-life task confirmed by the parent (game may still be pending)
+  stars: Record<number, number>; // best 1..3 per station
   skipped: number[];
   medals: Medal[];
   night: boolean;
@@ -28,11 +31,11 @@ const ALL = Array.from({ length: 13 }, (_, i) => i + 1);
 export const defaultSettings = (): Settings => ({
   volume: 0.7, pin: '', unlock: '06:00',
   rageTaps: 6, rageWindowMs: 1500, missStreak: 3, cooldownMin: 3,
-  reducedMotion: false,
+  reducedMotion: false, startLevel: {},
   days: { 0: [...ALL], 1: [...ALL], 2: [...ALL], 3: [...ALL], 4: [...ALL], 5: [...ALL], 6: [...ALL] },
 });
 
-const K = { settings: 'dq.settings', day: 'dq.day', log: 'dq.log' };
+const K = { settings: 'dq.settings', day: 'dq.day', log: 'dq.log', prog: 'dq.prog' };
 
 function read<T>(k: string, fallback: T): T {
   try { const s = localStorage.getItem(k); return s ? { ...fallback, ...JSON.parse(s) } : fallback; } catch { return fallback; }
@@ -42,7 +45,7 @@ function write(k: string, v: unknown) { try { localStorage.setItem(k, JSON.strin
 export let settings: Settings = read(K.settings, defaultSettings());
 export const saveSettings = () => write(K.settings, settings);
 
-const freshDay = (key: string): DayState => ({ key, done: [], skipped: [], medals: [], night: false });
+const freshDay = (key: string): DayState => ({ key, done: [], confirmed: [], stars: {}, skipped: [], medals: [], night: false });
 export let day: DayState = read(K.day, freshDay(''));
 export const saveDay = () => write(K.day, day);
 
@@ -79,7 +82,7 @@ export function rollDay(): boolean {
 export function resetToday() { day = freshDay(day.key || currentDayKey()); saveDay();
   const log = loadLog().filter((l) => l.key !== day.key); write(K.log, log); }
 export function resetEverything() {
-  try { localStorage.removeItem(K.settings); localStorage.removeItem(K.day); localStorage.removeItem(K.log); } catch { /* */ }
+  try { localStorage.removeItem(K.settings); localStorage.removeItem(K.day); localStorage.removeItem(K.log); localStorage.removeItem(K.prog); } catch { /* */ }
   settings = defaultSettings(); day = freshDay(currentDayKey()); saveDay(); saveSettings();
   idbClear();
 }
@@ -112,3 +115,14 @@ function idbClear() { tx('readwrite', (s) => s.clear()).catch(() => {}); }
 export async function requestPersist() {
   try { await navigator.storage?.persist?.(); } catch { /* ignore */ }
 }
+
+// ---------- per-game level progress ----------
+export interface Prog { level: number; wins: number; fails: number }
+type ProgMap = Record<string, Prog>;
+const readProg = (): ProgMap => { try { return JSON.parse(localStorage.getItem(K.prog) || '{}'); } catch { return {}; } };
+export function getProg(game: string): Prog {
+  const p = readProg()[game];
+  return p ?? { level: settings.startLevel[game] ?? 2, wins: 0, fails: 0 };
+}
+export function saveProg(game: string, p: Prog) { const m = readProg(); m[game] = p; write(K.prog, m); }
+export function resetProg() { try { localStorage.removeItem(K.prog); } catch { /* */ } }

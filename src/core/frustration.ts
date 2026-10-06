@@ -36,3 +36,10 @@ export function installRageDetector() {
     if (taps.length >= settings.rageTaps) fire('rage');
   }, true);
 }
+
+/** Ask permission to offer the calm corner (respects enabled/guard/cooldown); consumes the cooldown when granted. */
+export function tryOffer(): boolean {
+  const now = Date.now();
+  if (!guard() || now - lastTrigger < settings.cooldownMin * 60000) return false;
+  lastTrigger = now; return true;
+}

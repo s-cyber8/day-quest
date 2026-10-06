@@ -3,44 +3,52 @@ import { registerSW } from 'virtual:pwa-register';
 import { h, frag, sleep } from './core/dom';
 import { P } from './art/props';
 import { mokaSvg } from './art/moka';
-import { Station, asset, stationById } from './content/stations';
-import { settings, day, saveDay, rollDay, logStation, requestPersist } from './core/storage';
+import { Station, asset } from './content/stations';
+import { settings, day, saveDay, rollDay, logStation, requestPersist, getProg, saveProg, logCalm } from './core/storage';
 import { unlockAudio, sfx, applyVolume } from './core/audio';
-import { speak, stopSpeaking } from './core/speech';
+import { speak, stopSpeaking, preload } from './core/speech';
 import { isPaused } from './core/pause';
-import { installRageDetector, onFrustration, setFrustrationEnabled, setGuard } from './core/frustration';
-import { initCaption, say, stationCard, holdButton, confetti, flyStar, askGate, overlay, hideCaption } from './screens/ui';
-import { renderMap, currentStation, nextAfter, visibleStations } from './screens/map';
+import { installRageDetector, onFrustration, setFrustrationEnabled, setGuard, tryOffer } from './core/frustration';
+import { setBase, goBack, onBackVisible } from './core/back';
+import { setWake } from './core/wake';
+import { initCaption, stationCard, holdButton, confetti, askGate, hideCaption } from './screens/ui';
+import { renderMap, currentStation, nextAfter } from './screens/map';
 import { renderNight } from './screens/night';
 import { renderSticker } from './screens/sticker';
 import { renderParent } from './screens/parent';
 import { offerCalm, openCalm } from './screens/calm';
-import { GAMES, createCtx } from './games';
-import { text } from './content/phrases';
+import { GAMES } from './games';
+import { createCtx, Level, Outcome } from './games/engine';
+import { text, PHRASES } from './content/phrases';
 
 const app = document.getElementById('app')!;
 let calmOpen = false;
 
 function mountChrome() {
   app.after(h('div', { id: 'overlay' }), h('div', { id: 'caption', 'aria-live': 'polite' }));
-  const cloud = h('button', { id: 'cloud', 'data-testid': 'cloud', 'aria-label': 'הפינה השקטה של מוקה', onclick: () => requestCalm(false) }, frag(P.cloudBtn()));
-  cloud.dataset.t = '1';
-  document.body.append(cloud);
+  const back = h('button', { id: 'back', 'data-testid': 'back', 'aria-label': 'חזרה', hidden: true, onclick: () => { sfx.tap(); goBack(); } }, frag(P.arrow()));
+  const cloud = h('button', { id: 'cloud', 'data-testid': 'cloud', 'aria-label': 'הפינה השקטה של מוקה', onclick: () => requestCalm(false, 'self') }, frag(P.cloudBtn()));
+  cloud.dataset.t = '1'; back.dataset.t = '1';
+  document.body.append(back, cloud);
+  onBackVisible((v) => { back.hidden = !v; });
   initCaption();
 }
 const cloudBtn = () => document.getElementById('cloud') as HTMLElement;
-function setScreen(el: HTMLElement) {
+const VIEWS_WITH_WAKE = new Set(['announce', 'godo', 'game', 'celebrate', 'retry']);
+function setScreen(el: HTMLElement, back: (() => void) | null = null) {
   app.replaceChildren(el);
   const kind = el.dataset.screen || '';
   document.body.dataset.view = kind;
   cloudBtn().hidden = kind === 'night' || kind === 'parent';
+  setBase(back);
+  setWake(VIEWS_WITH_WAKE.has(kind));
 }
 const blocked = () => isPaused() || calmOpen || !!document.querySelector('.parent, .pad, .prompt, .calm') || document.body.dataset.view === 'night';
 
-async function requestCalm(auto: boolean) {
+async function requestCalm(auto: boolean, source: 'rage' | 'misses' | 'fails' | 'self') {
   if (calmOpen || document.body.dataset.view === 'night') return;
-  calmOpen = true; hideCaption();
-  try { await openCalm(auto); } finally { calmOpen = false; }
+  calmOpen = true; hideCaption(); setWake(true);
+  try { await openCalm(auto, source); } finally { calmOpen = false; setWake(VIEWS_WITH_WAKE.has(document.body.dataset.view || '')); }
 }
 
 function applyRM() { document.body.classList.toggle('rm', settings.reducedMotion || matchMedia('(prefers-reduced-motion: reduce)').matches); }
@@ -48,102 +56,169 @@ function applyRM() { document.body.classList.toggle('rm', settings.reducedMotion
 // ---------------- map / day ----------------
 function showMap(from?: Station) {
   setFrustrationEnabled(true);
-  setScreen(renderMap({ onStation: runStation, onParent: openParent, onBook: openBook }, from));
+  setScreen(renderMap({ onStation: runStation, onParent: openParent, onBook: openBook }, from), null);
 }
-function openBook() { setScreen(renderSticker(() => showMap())); }
+function openBook() { setScreen(renderSticker(() => showMap()), () => showMap()); }
 async function openParent() {
   if (!(await askGate())) return;
   stopSpeaking(); setFrustrationEnabled(false);
-  const prev = document.body.dataset.view;
-  const el = renderParent(() => { parent.remove(); cloudBtn().hidden = false; document.body.dataset.view = ''; if (day.night) showNight(false); else showMap(); }, applyRM);
-  const parent = el; document.body.append(parent); cloudBtn().hidden = true; document.body.dataset.view = 'parent'; void prev;
+  let popped = false;
+  const close = () => { if (popped) return; popped = true; parent.remove(); cloudBtn().hidden = false; document.body.dataset.view = ''; if (day.night) showNight(false); else showMap(); };
+  const parent = renderParent(close, applyRM);
+  document.body.append(parent); cloudBtn().hidden = true; document.body.dataset.view = 'parent'; setBase(close);
 }
 
 function showNight(fresh: boolean) {
   setFrustrationEnabled(false);
   day.night = true; saveDay();
-  const n = renderNight(fresh, async () => {
+  setScreen(renderNight(fresh, async () => {
     if (!(await askGate())) return;
     day.night = false; saveDay(); showMap();
-  });
-  setScreen(n);
+  }), null);
 }
 
-// ---------------- station flow ----------------
-function waitClick(btn: HTMLElement) { return new Promise<void>((res) => btn.addEventListener('click', () => res(), { once: true })); }
+// ---------------- station flow (cancellable: the back button leaves at any moment) ----------------
+interface Flow { cancelled: boolean; dispose?: () => void }
+let flow: Flow = { cancelled: true };
+function cancelFlow() {
+  flow.cancelled = true; flow.dispose?.(); stopSpeaking();
+  document.querySelectorAll('.celebrate, .prompt, .retry').forEach((n) => n.remove());
+  showMap();
+}
+const waitClick = (btn: HTMLElement) => new Promise<void>((res) => btn.addEventListener('click', () => res(), { once: true }));
 
 async function runStation(s: Station) {
   stopSpeaking(); setFrustrationEnabled(true);
-  // a. announce
-  const go = h('button', { class: 'bigbtn', 'data-testid': 'go', 'aria-label': 'מתחילים' }, frag(P.play()), h('span', {}, 'יאללה'));
+  flow.cancelled = true; flow.dispose?.();
+  const my: Flow = (flow = { cancelled: false });
+  const alive = () => !my.cancelled;
   const nxt = nextAfter(s);
-  const announce = h('div', { class: 'screen announce', 'data-screen': 'announce', 'data-station': String(s.id) },
-    h('div', { class: 'center' }, stationCard(s), h('div', { class: 'station-label' }, s.label)),
-    nxt ? h('div', { class: 'next', 'data-testid': 'next' }, h('span', {}, 'ואחר כך:'), h('img', { src: asset(`schedule/${nxt.image}.webp`), alt: '' }), h('span', {}, nxt.label)) : h('div'),
-    go);
-  setScreen(announce);
-  speak(s.announce, ...(nxt ? ['next.prefix', nxt.labelId] : []));
-  await waitClick(go); sfx.tap(); stopSpeaking();
+  preload([s.announce, s.go, s.labelId, ...(nxt ? [nxt.labelId] : []), 'next.prefix', 'done.cheer']);
 
-  // b. go do it
-  const confirmed = new Promise<void>((res) => {
-    const moka = mokaSvg('idle');
-    const screen = h('div', { class: 'screen godo', 'data-screen': 'godo', 'data-station': String(s.id) },
-      stationCard(s, true),
-      h('div', { class: 'mokabig' }, moka),
-      h('div', { class: 'hint' }, 'עושים את זה באמת. כשמסיימים, ההורה לוחץ על הכפה.'),
-      holdButton(res));
-    setScreen(screen);
-    speak(s.go);
-  });
-  await confirmed;
-  day.done.includes(s.id) || day.done.push(s.id); saveDay(); logStation(s.id);
+  if (!day.confirmed.includes(s.id)) {
+    // a. announce
+    const go = h('button', { class: 'bigbtn', 'data-testid': 'go', 'aria-label': 'מתחילים' }, frag(P.play()), h('span', {}, 'יאללה'));
+    const announce = h('div', { class: 'screen announce', 'data-screen': 'announce', 'data-station': String(s.id) },
+      h('div', { class: 'center' }, stationCard(s), h('div', { class: 'station-label' }, s.label)),
+      nxt ? h('div', { class: 'next', 'data-testid': 'next' }, h('span', {}, 'ואחר כך:'), h('img', { src: asset(`schedule/${nxt.image}.webp`), alt: '' }), h('span', {}, nxt.label)) : h('div'),
+      go);
+    setScreen(announce, cancelFlow);
+    speak(s.announce, ...(nxt ? ['next.prefix', nxt.labelId] : []));
+    await waitClick(go); if (!alive()) return; sfx.tap(); stopSpeaking();
 
-  // d. celebration with star flying to the map
-  await celebrate({ title: text('done.cheer'), star: true, ms: 4200, speakIds: ['done.cheer'] });
+    // b. go do it
+    await new Promise<void>((res) => {
+      const screen = h('div', { class: 'screen godo', 'data-screen': 'godo', 'data-station': String(s.id) },
+        stationCard(s, true), h('div', { class: 'mokabig' }, mokaSvg('idle')),
+        h('div', { class: 'hint' }, 'עושים את זה באמת. כשמסיימים, ההורה לוחץ על הכפה.'), holdButton(res));
+      setScreen(screen, cancelFlow);
+      speak(s.go);
+    });
+    if (!alive()) return;
+    day.confirmed.push(s.id); saveDay();
+    logStation(s.id);
+    await celebrate({ title: text('done.cheer'), ms: 3800, speakIds: ['done.cheer'] }, my);
+    if (!alive()) return;
+  } else { speak('game.intro'); }
 
-  // game
-  await playGame(s);
-  await celebrate({ title: text('game.end'), ms: 3000, speakIds: [], praise: true });
-
-  // e. back to the map (or Night Mode when the day is complete)
+  // game: levels, real wins and losses
+  const res = await gameLoop(s, my);
+  if (!alive() || !res) return;
+  if (!day.done.includes(s.id)) day.done.push(s.id);
+  day.stars[s.id] = Math.max(day.stars[s.id] ?? 0, res.stars); saveDay();
+  await celebrate({ title: text('game.end'), ms: 4200, speakIds: [], stars: res.stars, levelUp: res.levelUp }, my);
+  if (!alive()) return;
   if (!currentStation()) { showNight(true); return; }
   showMap(s);
 }
 
-function celebrate(o: { title: string; star?: boolean; ms: number; speakIds: string[]; praise?: boolean }): Promise<void> {
+function celebrate(o: { title: string; ms: number; speakIds: string[]; stars?: number; levelUp?: boolean }, my: Flow): Promise<void> {
   return new Promise((res) => {
     setFrustrationEnabled(false);
     const c = h('div', { class: 'celebrate', 'data-testid': 'celebrate', 'data-screen': 'celebrate' });
     const hero = h('img', { class: 'hero2', src: asset('avatar/rafael-football.png'), alt: '', draggable: 'false' });
-    const star = o.star ? frag(P.star()) : null; star?.classList.add('bigstar');
-    c.append(star ?? '', hero, h('div', { class: 'title' }, o.title), h('div', { class: 'buddy2' }, mokaSvg('happy')));
+    const row = o.stars != null ? h('div', { class: 'starrow', 'data-testid': 'starrow', 'data-stars': String(o.stars) }, ...[1, 2, 3].map((i) => { const st = frag(P.star(i <= o.stars! ? '#ffd966' : '#dfe6ec')); st.classList.add('bigstar'); if (i > o.stars!) st.classList.add('dim'); return st; })) : null;
+    c.append(row ?? '', hero, h('div', { class: 'title' }, o.levelUp ? text('lvl.up') : o.title), h('div', { class: 'buddy2' }, mokaSvg('happy')));
     confetti(c, 28);
     document.body.append(c); document.body.dataset.view = 'celebrate';
     sfx.big();
-    const praiseIds = [`praise.${1 + Math.floor(Math.random() * 5)}`];
-    speak(...o.speakIds, ...(o.praise || o.star ? praiseIds : []));
+    const ids = [...o.speakIds];
+    if (o.stars != null) ids.push(`star.${o.stars}`);
+    if (o.levelUp) ids.push('lvl.up'); else ids.push(`praise.${1 + Math.floor(Math.random() * 5)}`);
+    speak(...ids);
     let done = false;
     const end = async () => {
       if (done) return; done = true;
-      if (star) { await flyStar(star as unknown as HTMLElement, { x: 60, y: 60 }); }
+      if (my.cancelled) { res(); return; }
       c.classList.add('leaving'); await sleep(250); c.remove(); setFrustrationEnabled(true); res();
     };
     setTimeout(end, o.ms);
+    const iv = setInterval(() => { if (my.cancelled) { clearInterval(iv); c.remove(); end(); } }, 200);
   });
 }
 
-function playGame(s: Station): Promise<void> {
+type GameResult = { stars: number; levelUp: boolean } | null;
+async function gameLoop(s: Station, my: Flow): Promise<GameResult> {
+  const prog = getProg(s.game);
+  for (;;) {
+    if (my.cancelled) return null;
+    const out = await attempt(s, prog.level as Level, my);
+    if (my.cancelled || !out) return null;
+    if (out.result === 'win') {
+      prog.fails = 0; prog.wins++;
+      let levelUp = false;
+      if (prog.wins >= 2 && prog.level < 3) { prog.level++; prog.wins = 0; levelUp = true; }
+      saveProg(s.game, prog);
+      return { stars: out.stars, levelUp };
+    }
+    // lost: never punishing; after 2 fails in a row: easier level + Moka offers a quiet break
+    prog.wins = 0; prog.fails++;
+    let offerBreak = false;
+    if (prog.fails >= 2) { prog.fails = 0; if (prog.level > 1) prog.level--; offerBreak = true; }
+    saveProg(s.game, prog);
+    const choice = await retryOverlay(my, offerBreak && tryOffer());
+    if (my.cancelled) return null;
+    if (choice === 'back') { cancelFlow(); return null; }
+    if (choice === 'calm') { await requestCalm(true, 'fails'); if (my.cancelled) return null; }
+  }
+}
+
+function attempt(s: Station, level: Level, my: Flow): Promise<Outcome | null> {
   return new Promise((res) => {
-    const stage = h('div', { class: 'stage', 'data-testid': 'stage' });
-    const screen = h('div', { class: 'screen game', 'data-screen': 'game', 'data-game': s.game, 'data-station': String(s.id) }, h('div', { class: 'thumbrow' }, stationCard(s, true)), stage);
-    screen.querySelector<HTMLElement>('.thumbrow .card')!.style.maxWidth = '150px';
-    setScreen(screen); setFrustrationEnabled(true);
+    const stage = h('div', { class: 'stage', 'data-testid': 'stage', 'data-level': String(level) });
+    const screen = h('div', { class: 'screen game', 'data-screen': 'game', 'data-game': s.game, 'data-level': String(level), 'data-station': String(s.id) }, h('div', { class: 'thumbrow' }, stationCard(s, true)), stage);
+    screen.querySelector<HTMLElement>('.thumbrow .card')!.style.maxWidth = '120px';
+    setScreen(screen, cancelFlow); setFrustrationEnabled(true);
+    let ctx: ReturnType<typeof createCtx> | null = null;
+    my.dispose = () => { ctx?.dispose(); res(null); };
     requestAnimationFrame(() => requestAnimationFrame(() => {
-      const ctx = createCtx(stage, () => { ctx.dispose(); res(); });
-      (window as unknown as { __dqFinish?: () => void }).__dqFinish = () => ctx.finish();
+      if (my.cancelled) return;
+      ctx = createCtx(stage, level, (o) => { ctx?.dispose(); my.dispose = undefined; res(o); });
+      (window as unknown as { __dqEnd?: (o: Outcome) => void }).__dqEnd = (o) => (o.result === 'win' ? ctx!.win(o.stars) : ctx!.lose());
       GAMES[s.game](ctx);
     }));
+  });
+}
+
+/** Gentle "almost!" screen: Retry or Back to map. After 2 fails Moka also offers a quiet break. */
+function retryOverlay(my: Flow, offerBreak: boolean): Promise<'retry' | 'back' | 'calm'> {
+  return new Promise(async (res) => {
+    setFrustrationEnabled(false);
+    if (offerBreak) {
+      const yes = await offerCalm({ id: 'fail.break', keepLabel: 'עוד פעם' });
+      setFrustrationEnabled(true);
+      res(yes ? 'calm' : 'retry'); return;
+    }
+    const id = `retry.${1 + Math.floor(Math.random() * 3)}`;
+    const o = h('div', { class: 'retry', 'data-testid': 'retry', 'data-screen': 'retry' },
+      h('div', { class: 'say' }, text(id)), h('div', { class: 'mokaw' }, mokaSvg('concerned')),
+      h('div', { class: 'choices' },
+        h('button', { 'data-testid': 'retry-again', onclick: () => fin('retry') }, frag(P.retry()), h('span', {}, 'עוד פעם')),
+        h('button', { 'data-testid': 'retry-back', onclick: () => fin('back') }, frag(P.arrow()), h('span', {}, 'למפה'))));
+    const fin = (c: 'retry' | 'back') => { o.remove(); stopSpeaking(); setFrustrationEnabled(true); res(c); };
+    document.body.dataset.view = 'retry';
+    document.body.append(o); speak(id);
+    const iv = setInterval(() => { if (my.cancelled) { clearInterval(iv); o.remove(); res('back'); } }, 200);
   });
 }
 
@@ -151,10 +226,14 @@ function playGame(s: Station): Promise<void> {
 async function boot() {
   applyRM(); applyVolume();
   mountChrome();
-  const fresh = rollDay();
+  rollDay();
   installRageDetector();
   setGuard(() => !blocked());
-  onFrustration(async () => { if (blocked()) return; calmOpen = true; const yes = await offerCalm(); calmOpen = false; if (yes) await requestCalm(true); });
+  onFrustration(async (reason) => {
+    if (blocked()) return;
+    calmOpen = true; const yes = await offerCalm(); calmOpen = false;
+    if (yes) await requestCalm(true, reason);
+  });
 
   let unlocked = false;
   document.addEventListener('pointerdown', () => {
@@ -167,12 +246,12 @@ async function boot() {
   matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', applyRM);
 
   // new day (morning unlock)
-  const tickDay = () => { if (rollDay()) { stopSpeaking(); document.querySelectorAll('.parent,.pad,.celebrate,.calm,.prompt').forEach((n) => n.remove()); showMap(); speak('morning.1'); } };
+  const tickDay = () => { if (rollDay()) { stopSpeaking(); flow.cancelled = true; document.querySelectorAll('.parent,.pad,.celebrate,.calm,.prompt,.retry').forEach((n) => n.remove()); showMap(); speak('morning.1'); } };
   setInterval(tickDay, 15000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tickDay(); });
 
   if (day.night) showNight(false); else showMap();
-  void fresh; void visibleStations; void stationById;
   registerSW({ immediate: true });
+  void logCalm; void PHRASES;
 }
 boot();

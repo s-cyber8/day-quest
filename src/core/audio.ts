@@ -3,6 +3,8 @@ import { settings } from './storage';
 
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
+let sfxBus: GainNode | null = null;
+let speechBus: GainNode | null = null;
 let noiseBuf: AudioBuffer | null = null;
 
 function ensure(): AudioContext | null {
@@ -13,6 +15,8 @@ function ensure(): AudioContext | null {
     const comp = ctx.createDynamicsCompressor();
     master = ctx.createGain();
     master.connect(comp); comp.connect(ctx.destination);
+    sfxBus = ctx.createGain(); sfxBus.connect(master);
+    speechBus = ctx.createGain(); speechBus.connect(master);
     applyVolume();
     noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
     const d = noiseBuf.getChannelData(0);
@@ -25,29 +29,31 @@ export function applyVolume() { if (master) master.gain.value = settings.volume 
 /** Call on the first user gesture (iOS needs this). */
 export function unlockAudio() {
   const c = ensure(); if (!c) return;
+  // iOS: let Web Audio play even with the silent switch on
+  try { const as = (navigator as unknown as { audioSession?: { type: string } }).audioSession; if (as) as.type = 'playback'; } catch { /* */ }
   if (c.state !== 'running') c.resume().catch(() => {});
   try { const b = c.createBuffer(1, 1, 22050); const s = c.createBufferSource(); s.buffer = b; s.connect(c.destination); s.start(0); } catch { /* */ }
 }
 
 function tone(f: number, t0: number, dur: number, type: OscillatorType = 'sine', gain = 0.12, f2?: number) {
-  const c = ensure(); if (!c || !master) return;
+  const c = ensure(); if (!c || !sfxBus) return;
   const o = c.createOscillator(); const g = c.createGain();
   o.type = type; o.frequency.setValueAtTime(f, t0);
   if (f2) o.frequency.exponentialRampToValueAtTime(f2, t0 + dur);
   g.gain.setValueAtTime(0.0001, t0);
   g.gain.linearRampToValueAtTime(gain, t0 + Math.min(0.03, dur / 3));
   g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-  o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + dur + 0.05);
+  o.connect(g); g.connect(sfxBus!); o.start(t0); o.stop(t0 + dur + 0.05);
 }
 function noise(t0: number, dur: number, f0: number, f1: number, gain = 0.08, q = 1.2) {
-  const c = ensure(); if (!c || !master || !noiseBuf) return;
+  const c = ensure(); if (!c || !sfxBus || !noiseBuf) return;
   const s = c.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
   const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = q;
   bp.frequency.setValueAtTime(f0, t0); bp.frequency.exponentialRampToValueAtTime(f1, t0 + dur);
   const g = c.createGain();
   g.gain.setValueAtTime(0.0001, t0); g.gain.linearRampToValueAtTime(gain, t0 + dur * 0.4);
   g.gain.linearRampToValueAtTime(0.0001, t0 + dur);
-  s.connect(bp); bp.connect(g); g.connect(master); s.start(t0); s.stop(t0 + dur + 0.05);
+  s.connect(bp); bp.connect(g); g.connect(sfxBus!); s.start(t0); s.stop(t0 + dur + 0.05);
 }
 const now = () => ensure()?.currentTime ?? 0;
 const N = (semi: number, base = 523.25) => base * Math.pow(2, semi / 12);
@@ -118,4 +124,32 @@ export async function openMic(): Promise<Mic | null> {
       stop() { src.disconnect(); stream.getTracks().forEach((t) => t.stop()); },
     };
   } catch { return null; }
+}
+
+// ---- shared AudioContext access for speech (same context that SFX use: it is the one iOS unlocks) ----
+export const audioCtx = () => ensure();
+export function playSpeechBuffer(buf: AudioBuffer, onEnd: () => void): () => void {
+  const c = ensure();
+  if (!c || !speechBus) { onEnd(); return () => {}; }
+  if (c.state !== 'running') c.resume().catch(() => {});
+  const src = c.createBufferSource(); src.buffer = buf; src.connect(speechBus);
+  let ended = false;
+  const done = () => { if (ended) return; ended = true; duck(false); onEnd(); };
+  src.onended = done;
+  duck(true); src.start();
+  return () => { try { src.onended = null; src.stop(); } catch { /* */ } ended = true; duck(false); };
+}
+/** SFX sit slightly under speech. */
+export function duck(on: boolean) {
+  const c = ensure(); if (!c || !sfxBus) return;
+  sfxBus.gain.setTargetAtTime(on ? 0.5 : 1, c.currentTime, 0.08);
+}
+export function decode(data: ArrayBuffer): Promise<AudioBuffer> {
+  const c = ensure();
+  return new Promise((res, rej) => {
+    if (!c) { rej(new Error('no audio')); return; }
+    // Safari (old) only supports the callback form
+    const p = c.decodeAudioData(data.slice(0), res, rej);
+    p?.then?.(res, rej);
+  });
 }

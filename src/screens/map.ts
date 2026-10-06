@@ -35,8 +35,7 @@ export function renderMap(hooks: MapHooks, from?: Station): HTMLElement {
     const done = day.done.includes(s.id), isCur = cur?.id === s.id;
     const n = h('button', { class: 'node' + (isCur ? ' current' : done ? '' : ' future'), 'data-testid': 'node-' + s.id, 'aria-label': s.label, style: `left:${pos[i].x}%;top:${pos[i].y}px` },
       h('img', { class: 'thumb', src: imgOf(s), alt: '', draggable: 'false' }), h('div', { class: 'num' }, String(s.id)));
-    if (done) n.append(frag(P.star()), );
-    if (done) (n.lastChild as HTMLElement).setAttribute('class', 'star');
+    if (done) { const sw = h('div', { class: 'star' }, frag(P.star()), h('span', { class: 'sn' }, String(day.stars[s.id] ?? 1))); n.append(sw); }
     if (isCur) { n.dataset.t = '1'; n.addEventListener('click', () => { sfx.tap(); hooks.onStation(s); }); }
     inner.append(n);
   });
@@ -53,13 +52,13 @@ export function renderMap(hooks: MapHooks, from?: Station): HTMLElement {
   inner.append(buddy, hero);
   place(fromIdx >= 0 ? fromIdx : idx);
 
-  const stars = day.done.length;
+  const stars = day.done.reduce((a, id) => a + (day.stars[id] ?? 1), 0);
   const medals = h('div', { class: 'medals', 'data-testid': 'medals' }, ...day.medals.slice(-5).map(() => frag(P.medal())));
-  const starsEl = h('div', { class: 'stars', 'data-testid': 'stars', id: 'starcounter' }, frag(P.star()), h('span', {}, `${stars}/${vis.length}`));
+  const starsEl = h('div', { class: 'stars', 'data-testid': 'stars', id: 'starcounter' }, frag(P.star()), h('span', {}, `${stars}`));
   const scroll = h('div', { class: 'mapscroll' }, inner);
   const gear = h('button', { class: 'gear', 'data-testid': 'gear', 'aria-label': 'הורים', onclick: () => hooks.onParent() }, frag(P.gear()));
   const book = h('button', { class: 'rbtn book', 'data-testid': 'book', 'aria-label': 'ספר מדבקות', onclick: () => { sfx.tap(); hooks.onBook(); } }, frag(P.book()));
-  const screen = h('div', { class: 'screen map', 'data-screen': 'map' }, h('div', { class: 'topbar' }, starsEl, medals), scroll, h('div', { class: 'mapfoot' }, gear, book));
+  const screen = h('div', { class: 'screen map', 'data-screen': 'map' }, h('div', { class: 'topbar' }, starsEl, medals), scroll, h('div', { class: 'mapfoot' }, book, gear));
 
   // after layout: scroll to the hero, and walk from the previous station if we just finished one
   requestAnimationFrame(() => {

@@ -1,20 +1,17 @@
-// Every spoken line in the app. Stable ids: parent voice recordings are keyed by id.
-// Rules: Hebrew, male addressing, warm, max ~8 words.
-export interface Phrase { text: string; group: string }
+// Every spoken line in the app. Stable ids: parent recordings and bundled voice-over are keyed by id.
+// Rules: Hebrew, male addressing of Rafael, warm, concrete kid words, max ~8 words.
+// speaker: 'narrator' = adult narrator voice; 'moka' = the dog, first person, feminine.
+// tts: optional pronunciation text (niqqud only where a word is likely to be misread). UI shows `text`.
+export type Speaker = 'narrator' | 'moka';
+export interface Phrase { text: string; group: string; speaker: Speaker; tts?: string }
 
 const G = {
-  station: 'תחנות – הכרזה',
-  go: 'תחנות – "עכשיו עושים באמת"',
-  label: 'שמות התחנות',
-  game: 'הוראות למשחקונים',
-  praise: 'שבחים',
-  retry: 'ניסיון נוסף (בעדינות)',
-  calm: 'הפינה השקטה',
-  night: 'לילה ובוקר',
-  misc: 'כללי',
+  station: 'תחנות – הכרזה', go: 'תחנות – "עכשיו עושים באמת"', label: 'שמות התחנות', game: 'הוראות למשחקונים',
+  praise: 'שבחים ושלבים', retry: 'ניסיון נוסף (בעדינות)', calm: 'הפינה השקטה', night: 'לילה ובוקר', misc: 'כללי',
 } as const;
 
-const raw: [string, string, string][] = [
+type Row = [string, string, string, ('m' | 'n')?, string?];
+const raw: Row[] = [
   // --- announce
   ['st.1.announce', G.station, 'רפאל, בוקר טוב! מתעוררים!'],
   ['st.2.announce', G.station, 'רפאל, עכשיו מצחצחים שיניים!'],
@@ -39,9 +36,9 @@ const raw: [string, string, string][] = [
   ['st.7.go', G.go, 'לך לשחק כדורגל באמת. בהצלחה!'],
   ['st.8.go', G.go, 'לך להתאמן באמת. אתה נינג׳ה!'],
   ['st.9.go', G.go, 'בנה משהו מיוחד עם הקוביות.'],
-  ['st.10.go', G.go, 'שחק משחק קופסה באמת. תהנה!'],
+  ['st.10.go', G.go, 'שחק משחק קופסה באמת. תיהנה!'],
   ['st.11.go', G.go, 'שב לאכול באמת. בתיאבון!'],
-  ['st.12.go', G.go, 'לך להתרחץ באמת. תהנה!'],
+  ['st.12.go', G.go, 'לך להתרחץ באמת. תיהנה!'],
   ['st.13.go', G.go, 'לך לישון באמת. לילה טוב.'],
   // --- labels (as on the printed board)
   ['st.1.label', G.label, 'מתעורר בבוקר'],
@@ -58,80 +55,108 @@ const raw: [string, string, string][] = [
   ['st.12.label', G.label, 'מתרחץ באמבטיה'],
   ['st.13.label', G.label, 'הולך לישון'],
   ['next.prefix', G.misc, 'ואחר כך:'],
-  ['go.wait', G.misc, 'מוקה מחכה. כשתסיים, ההורה לוחץ על כפה.'],
+  ['go.wait', G.misc, 'מוקה מחכה. כשתסיים, ההורה לוחץ על הכפה.'],
   ['go.ready', G.misc, 'מוכן? בוא נתחיל!'],
   ['done.cheer', G.misc, 'עשית את זה באמת! וואו!'],
   ['game.intro', G.misc, 'עכשיו משחק קטן, בשבילך!'],
   ['game.end', G.misc, 'סיימנו! איזה כיף היה.'],
   ['map.hello', G.misc, 'בוא נמשיך בדרך!'],
   ['map.allDone', G.misc, 'סיימת את כל היום! כל הכבוד!'],
-  // --- praise x5
-  ['praise.1', G.praise, 'כל הכבוד רפאל!'],
-  ['praise.2', G.praise, 'איזה יופי!'],
-  ['praise.3', G.praise, 'וואו, עשית את זה!'],
-  ['praise.4', G.praise, 'אתה מדהים!'],
+  // --- praise (effort / process, not "you are amazing")
+  ['praise.1', G.praise, 'התאמצת ועשית את זה!'],
+  ['praise.2', G.praise, 'ניסית שוב והצלחת!'],
+  ['praise.3', G.praise, 'כל הכבוד רפאל!'],
+  ['praise.4', G.praise, 'וואו, עשית את זה!'],
   ['praise.5', G.praise, 'מוקה כל כך גאה בך!'],
-  // --- retry x3
-  ['retry.1', G.retry, 'כמעט! בוא ננסה שוב'],
-  ['retry.2', G.retry, 'קרוב מאוד! עוד פעם'],
-  ['retry.3', G.retry, 'לא נורא, ננסה ביחד'],
-  // --- games
-  ['g.1.how', G.game, 'גע בווילונות כדי לפתוח אותם'],
-  ['g.1.stretch', G.game, 'עכשיו גע ברפאל, ותתמתח!'],
-  ['g.2.how', G.game, 'העבר את האצבע על הפה ותפוצץ חיידקים'],
+  ['lvl.up', G.praise, 'עלית שלב! כל הכבוד!'],
+  ['star.1', G.praise, 'קיבלת כוכב!'],
+  ['star.2', G.praise, 'קיבלת שני כוכבים!'],
+  ['star.3', G.praise, 'קיבלת שלושה כוכבים!'],
+  // --- retry (Moka)
+  ['retry.1', G.retry, 'כמעט! עוד פעם?', 'm'],
+  ['retry.2', G.retry, 'קרוב מאוד! ננסה שוב?', 'm'],
+  ['retry.3', G.retry, 'לא נורא, ננסה ביחד', 'm'],
+  ['fail.break', G.retry, 'רוצה הפסקה שקטה איתי?', 'm'],
+  // --- games (kid words: press, move, brush)
+  ['g.1.curtains', G.game, 'תלחץ על הווילונות כדי לפתוח אותם'],
+  ['g.1.clock', G.game, 'עכשיו תלחץ על השעון'],
+  ['g.1.stretch', G.game, 'עכשיו תלחץ על רפאל כדי שיתמתח!'],
+  ['g.1.order', G.game, 'תעשה לפי הסדר שבתמונה'],
+  ['g.1.simon', G.game, 'תסתכל טוב, ואחר כך תעשה אותו דבר'],
+  ['g.1.simon.go', G.game, 'עכשיו תורך!'],
+  ['g.2.how', G.game, 'תעביר את המברשת על השיניים'],
+  ['g.2.hide', G.game, 'החיידקים מתחבאים! תחכה שהם יצאו'],
+  ['g.2.zone', G.game, 'מצחצחים רק איפה שמסומן'],
   ['g.2.done', G.game, 'השיניים נוצצות!'],
-  ['g.3.how', G.game, 'גרור את הבגד אל רפאל'],
+  ['g.3.how', G.game, 'שים את האצבע על הבגד ותזיז אותו לרפאל'],
+  ['g.3.order', G.game, 'מתלבשים לפי הסדר, מלמעלה למטה'],
+  ['g.3.sunny', G.game, 'היום חם ושמשי! מה לובשים?'],
   ['g.3.done', G.game, 'רפאל לבוש ומוכן!'],
-  ['g.4.how', G.game, 'גרור את האוכל אל הקערה'],
+  ['g.4.how', G.game, 'תשים על השולחן את מה שבתמונה'],
+  ['g.4.memory', G.game, 'תסתכל טוב ותזכור מה צריך'],
   ['g.4.done', G.game, 'נאם נאם! בתיאבון!'],
-  ['g.5.how', G.game, 'גע במסך כדי לצעוד, ולאסוף כוכבים'],
-  ['g.6.how', G.game, 'גרור קוביות ובנה מגדל גבוה'],
-  ['g.6.star', G.game, 'עכשיו שים כוכב למעלה'],
-  ['g.7.how', G.game, 'החלק את הכדור אל השער'],
+  ['g.5.how', G.game, 'תלחץ על המסך כדי לקפוץ מעל השלוליות'],
+  ['g.6.how', G.game, 'תלחץ על המסך כדי להפיל את הקובייה'],
+  ['g.6.top', G.game, 'וואו, איזה מגדל גבוה!'],
+  ['g.6.fell', G.game, 'המגדל נפל. נבנה שוב!', 'm'],
+  ['g.7.how', G.game, 'תעביר את האצבע מהכדור אל השער'],
   ['g.7.goal', G.game, 'גול!'],
-  ['g.8.how', G.game, 'גע במסך כדי להתנדנד ולקפוץ'],
-  ['g.9.how', G.game, 'גרור צורות ובנה מה שבא לך'],
-  ['g.9.finish', G.game, 'כשתסיים, גע בכפתור הירוק'],
-  ['g.10.how', G.game, 'גע בקלפים ומצא זוגות'],
-  ['g.11.how', G.game, 'גרור את האוכל אל הצלחת'],
+  ['g.7.saved', G.game, 'השוער תפס! נבעט שוב', 'm'],
+  ['g.8.how', G.game, 'תלחץ כשהעיגול נמצא בירוק'],
+  ['g.8.fall', G.game, 'נפלת על המזרן הרך. נקום ונמשיך!', 'm'],
+  ['g.9.choose', G.game, 'רוצה לבנות חופשי, או כמו בתמונה?'],
+  ['g.9.how', G.game, 'שים את האצבע על צורה והזז אותה'],
+  ['g.9.finish', G.game, 'כשתסיים, תלחץ על הכפתור הירוק'],
+  ['g.9.copy', G.game, 'תבנה בדיוק כמו בתמונה'],
+  ['g.10.how', G.game, 'תלחץ על קלפים ותמצא שניים אותו דבר'],
+  ['g.10.peek', G.game, 'תסתכל טוב על הקלפים'],
+  ['g.11.how', G.game, 'שים כל אוכל במקום שלו בצלחת'],
+  ['g.11.candy', G.game, 'ממתקים לא מתאימים לצלחת'],
   ['g.11.water', G.game, 'ועכשיו כוס מים לשולחן'],
-  ['g.12.how', G.game, 'העבר אצבע וקרצף, ותפוצץ בועות'],
-  ['g.13.how', G.game, 'גע במנורות כדי לכבות אותן'],
-  ['g.13.teddy', G.game, 'עכשיו גרור את הדובי למיטה'],
-  ['g.13.moka', G.game, 'מוקה שוכבת לישון'],
+  ['g.12.how', G.game, 'תקרצף עם האצבע את מה שאני אומר'],
+  ['g.12.hands', G.game, 'עכשיו הידיים!'],
+  ['g.12.feet', G.game, 'עכשיו הרגליים!'],
+  ['g.12.head', G.game, 'עכשיו הראש!'],
+  ['g.12.tummy', G.game, 'עכשיו הבטן!'],
+  ['g.12.ears', G.game, 'עכשיו האוזניים!'],
+  ['g.13.how', G.game, 'תלחץ על המנורות לפי הסדר'],
+  ['g.13.find', G.game, 'איפה הדובי? תחפש אותו!'],
+  ['g.13.teddy', G.game, 'תזיז את הדובי אל המיטה'],
+  ['g.13.moka', G.game, 'מוקה נרדמת.'],
   // --- calm corner
-  ['calm.offer', G.calm, 'נראה שקשה. רוצה לבוא איתי לפינה השקטה?'],
-  ['calm.welcome', G.calm, 'הנה הפינה השקטה של מוקה'],
-  ['calm.pick', G.calm, 'מה בא לך לעשות?'],
-  ['calm.water.how', G.calm, 'שים אצבע על הכוס, ושתה לאט'],
-  ['calm.ball.how', G.calm, 'לחץ והחזק לאט, ואז שחרר'],
-  ['calm.pet.how', G.calm, 'ליטוף איטי איטי למוקה'],
-  ['calm.pet.slow', G.calm, 'לאט... היא אוהבת לאט'],
-  ['calm.breath.how', G.calm, 'נשימה גדולה, ונפח את הבלון'],
+  ['calm.offer', G.calm, 'נראה שקשה. רוצה לבוא איתי לפינה השקטה שלי?', 'm'],
+  ['calm.welcome', G.calm, 'הנה הפינה השקטה שלי', 'm'],
+  ['calm.pick', G.calm, 'מה בא לך לעשות?', 'm'],
+  ['calm.water.how', G.calm, 'שים את האצבע על הכוס, ותשתה לאט'],
+  ['calm.ball.how', G.calm, 'תלחץ חזק לאט, ואז תעזוב'],
+  ['calm.pet.how', G.calm, 'תלטף את מוקה לאט לאט'],
+  ['calm.pet.slow', G.calm, 'לאט... אני אוהבת לאט', 'm'],
+  ['calm.breath.how', G.calm, 'קח נשימה גדולה ותנפח את הבלון'],
   ['calm.breath.in', G.calm, 'שואפים אוויר...'],
   ['calm.breath.out', G.calm, 'ונושפים לאט...'],
-  ['calm.breath.hold', G.calm, 'החזק לשאוף, שחרר לנשוף'],
-  ['calm.nice', G.calm, 'יפה מאוד. לאט ושקט.'],
-  ['calm.feel.ask', G.calm, 'איך אתה מרגיש עכשיו?'],
-  ['calm.feel.more', G.calm, 'בוא ננסה עוד משהו שקט'],
-  ['calm.feel.green', G.calm, 'איזה כיף! אתה רגוע'],
+  ['calm.breath.hold', G.calm, 'לוחצים ושואפים, עוזבים ונושפים'],
+  ['calm.nice', G.calm, 'יפה מאוד. לאט ושקט.', 'm'],
+  ['calm.feel.ask', G.calm, 'איך אתה מרגיש עכשיו?', 'm'],
+  ['calm.feel.more', G.calm, 'בוא ננסה עוד משהו שקט', 'm'],
+  ['calm.feel.green', G.calm, 'איזה כיף! אתה רגוע', 'm'],
   ['calm.bridge.water', G.calm, 'עכשיו בוא נשתה כוס מים אמיתית'],
-  ['calm.bridge.ball', G.calm, 'עכשיו בוא נלחץ כדור אמיתי'],
+  ['calm.bridge.ball', G.calm, 'עכשיו בוא נלחץ על כדור אמיתי'],
   ['calm.bridge.pet', G.calm, 'עכשיו בוא נלטף את מוקה באמת'],
   ['calm.bridge.breath', G.calm, 'עכשיו בוא ננשום נשימה גדולה באמת'],
   ['calm.medal', G.calm, 'קיבלת מדליית רוגע!'],
-  ['calm.back', G.calm, 'בוא נחזור למקום שהיינו בו'],
+  ['calm.back', G.calm, 'בוא נחזור למקום שהיינו בו', 'm'],
   // --- night / morning
   ['night.1', G.night, 'לילה טוב רפאל. חלומות מתוקים.'],
-  ['night.2', G.night, 'מוקה ישנה. גם אתה ישן.'],
+  ['night.2', G.night, 'מוקה נרדמת. גם אתה נרדם.'],
   ['morning.1', G.night, 'בוקר טוב רפאל! יום חדש מתחיל!'],
 ];
 
 export const PHRASES: Record<string, Phrase> = Object.fromEntries(
-  raw.map(([id, group, text]) => [id, { text, group }]),
+  raw.map(([id, group, text, sp, tts]) => [id, { text, group, speaker: sp === 'm' ? 'moka' : 'narrator', tts }]),
 );
 export const PHRASE_IDS = raw.map((r) => r[0]);
 export const text = (id: string): string => PHRASES[id]?.text ?? id;
+export const speakerOf = (id: string): Speaker => PHRASES[id]?.speaker ?? 'narrator';
 
 export const PRAISE_IDS = ['praise.1', 'praise.2', 'praise.3', 'praise.4', 'praise.5'];
 export const RETRY_IDS = ['retry.1', 'retry.2', 'retry.3'];

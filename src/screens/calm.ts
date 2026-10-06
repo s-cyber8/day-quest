@@ -9,24 +9,28 @@ import { pauseGame } from '../core/pause';
 import { day, saveDay, logCalm, settings } from '../core/storage';
 import { confetti, holdButton, overlay } from './ui';
 import { text } from '../content/phrases';
+import { pushBack } from '../core/back';
 
 export type Feeling = 'calm' | 'meh' | 'upset';
 type Activity = 'water' | 'ball' | 'pet' | 'breath';
 const ACT_LABEL: Record<Activity, string> = { water: 'לשתות מים', ball: 'ללחוץ כדור', pet: 'ללטף את מוקה', breath: 'לנפח בלון' };
 
-/** Auto-trigger prompt. Resolves true if he wants to go to the calm corner. */
-export function offerCalm(): Promise<boolean> {
+/** Moka's invitation (auto trigger or after repeated fails). Resolves true if he wants the calm corner. */
+export function offerCalm(opts: { id?: string; keepLabel?: string } = {}): Promise<boolean> {
+  const id = opts.id ?? 'calm.offer';
   return new Promise((res) => {
     pauseGame(true);
     const moka = mokaSvg('concerned');
     const mk = h('div', { class: 'mokaw' }, moka);
-    const close = (yes: boolean) => { p.remove(); stopSpeaking(); pauseGame(false); res(yes); };
+    let popBack = () => {};
+    const close = (yes: boolean) => { popBack(); p.remove(); stopSpeaking(); pauseGame(false); res(yes); };
     const come = h('button', { 'data-testid': 'calm-yes', onclick: () => close(true) }, frag(P.cloudBtn()), h('span', {}, 'בוא עם מוקה'));
-    const keep = h('button', { 'data-testid': 'calm-no', onclick: () => close(false) }, frag(P.play()), h('span', {}, 'להמשיך לשחק'));
+    const keep = h('button', { 'data-testid': 'calm-no', onclick: () => close(false) }, frag(P.play()), h('span', {}, opts.keepLabel ?? 'להמשיך לשחק'));
     (keep.firstChild as SVGElement).style.color = '#7fb9de';
-    const p = h('div', { class: 'prompt', 'data-testid': 'calm-prompt' }, h('div', { class: 'say' }, text('calm.offer')), mk, h('div', { class: 'choices' }, come, keep));
+    const p = h('div', { class: 'prompt', 'data-testid': 'calm-prompt' }, h('div', { class: 'say' }, text(id)), mk, h('div', { class: 'choices' }, come, keep));
     overlay().append(p);
-    speak('calm.offer');
+    popBack = pushBack(() => close(false));
+    speak(id);
   });
 }
 
@@ -46,7 +50,7 @@ let mokaEl: HTMLElement;
 
 const raf = (fn: (dt: number) => boolean | void) => {
   let last = performance.now(), id = 0, stopped = false;
-  const f = (t: number) => { if (stopped) return; const dt = Math.min(0.05, (t - last) / 1000); last = t; if (fn(dt) === true) return; id = requestAnimationFrame(f); };
+  const f = (t: number) => { if (stopped || !alive) return; const dt = Math.min(0.05, (t - last) / 1000); last = t; if (fn(dt) === true) return; id = requestAnimationFrame(f); };
   id = requestAnimationFrame(f);
   return () => { stopped = true; cancelAnimationFrame(id); };
 };
@@ -140,8 +144,9 @@ function breath(): Promise<void> {
     const dots = h('div', { style: 'display:flex;gap:10px' }, ...Array.from({ length: CYCLES }, () => h('i', { style: 'width:18px;height:18px;border-radius:50%;background:#fff;opacity:.6' })));
     host.replaceChildren(label, box, dots, prog.b);
     const micP = openMic(); // permission prompt may take a while: the screen is already showing
-    const mic: Mic | null = await micP;
+    const mic: Mic | null = await micP; activeMic = mic;
     document.body.dataset.mic = mic ? 'mic' : 'fallback';
+    if (!alive) { mic?.stop(); return; }
     const setRing = (p: number) => { const s = 70 + p * 150; ring.style.width = ring.style.height = s + 'px'; };
     setRing(0);
     let done = 0, size = 0;
@@ -153,7 +158,7 @@ function breath(): Promise<void> {
       await sleep(1800);
       for (let c = 0; c < CYCLES; c++) {
         label.textContent = text('calm.breath.in'); speak('calm.breath.in'); sfx.breathe(true, 4);
-        for (let t = 0; t < 4; t += 0.05) { setRing(t / 4); await sleep(50); }
+        for (let t = 0; t < 4; t += 0.05) { setRing(t / 4); await sleep(50); if (!alive) return; }
         label.textContent = text('calm.breath.out'); speak('calm.breath.out'); sfx.breathe(false, 4);
         let gain = 0;
         for (let t = 0; t < 4; t += 0.05) {
@@ -161,7 +166,7 @@ function breath(): Promise<void> {
           const l = mic.level(); document.body.dataset.miclevel = l.toFixed(3);
           gain += (0.4 + 0.6 * Math.min(1, l / 0.05)) * 0.05 / 4; // blowing inflates more; a soft floor keeps it no-fail
           bal.style.transform = `scale(${0.55 + ((done + gain) / CYCLES) * 0.7})`;
-          await sleep(50);
+          await sleep(50); if (!alive) return;
         }
         cycleDone();
       }
@@ -223,34 +228,44 @@ async function medalCelebration(a: Activity) {
   c.remove();
 }
 
-/** Open the calm corner. Resolves when he returns to where he left off. */
-export async function openCalm(auto: boolean): Promise<void> {
-  pauseGame(true);
+let alive = false;
+let activeMic: Mic | null = null;
+let abortNow: (() => void) | null = null;
+const ABORT = Symbol('abort');
+const guarded = <T,>(p: Promise<T>): Promise<T | typeof ABORT> => Promise.race([p, new Promise<typeof ABORT>((r) => { abortNow = () => r(ABORT); })]);
+
+/** Open the calm corner. Resolves when he returns to where he left off (also via the back button). */
+export async function openCalm(auto: boolean, source: 'rage' | 'misses' | 'fails' | 'self' = auto ? 'rage' : 'self'): Promise<void> {
+  pauseGame(true); alive = true;
   mokaEl = mokaSvg('idle');
   host = h('div', { class: 'act' });
   const root = h('div', { class: 'calm', 'data-testid': 'calm' }, h('div', { class: 'mokac' }, mokaEl), host);
   document.body.append(root);
+  const popBack = pushBack(() => abortNow?.());
   speak('calm.welcome');
-  await sleep(500);
-  const before = await feelings();
   let after: Feeling | 'left' = 'left'; let medal = false; let first = true; let last: Activity = 'water'; const used: Activity[] = [];
-  for (;;) {
-    const a = await pick(first); first = false;
-    if (a === 'back') break;
-    last = a; used.push(a);
-    await RUN[a]();
-    setMoka(mokaEl, 'happy'); sfx.success(); speak('calm.nice');
-    await sleep(1400);
-    setMoka(mokaEl, 'idle');
-    after = await feelings();
-    if (after === 'calm') {
-      setMoka(mokaEl, 'happy'); speak('calm.feel.green'); await sleep(1600);
-      await bridge(a);
-      await medalCelebration(a); medal = true; break;
+  try {
+    for (;;) {
+      const a = await guarded(pick(first)); first = false;
+      if (a === ABORT || a === 'back') break;
+      last = a; used.push(a);
+      if ((await guarded(RUN[a]())) === ABORT) break;
+      setMoka(mokaEl, 'happy'); sfx.success(); speak('calm.nice');
+      await sleep(1400);
+      setMoka(mokaEl, 'idle');
+      const f = await guarded(feelings());
+      if (f === ABORT) break;
+      after = f;
+      if (after === 'calm') {
+        setMoka(mokaEl, 'happy'); speak('calm.feel.green'); await sleep(1600);
+        if ((await guarded(bridge(a))) === ABORT) break;
+        await medalCelebration(a); medal = true; break;
+      }
     }
+  } finally {
+    alive = false; abortNow = null; activeMic?.stop(); activeMic = null;
+    logCalm({ t: Date.now(), auto, source, activity: used.join('+') || last, after, medal });
+    stopSpeaking(); popBack(); root.remove(); pauseGame(false);
   }
-  logCalm({ t: Date.now(), auto, activity: used.join('+') || last, before, after, medal });
-  stopSpeaking();
-  root.remove(); pauseGame(false);
   void settings;
 }

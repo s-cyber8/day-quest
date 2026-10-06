@@ -1,0 +1,11 @@
+import { chromium, devices } from '@playwright/test';
+const b = await chromium.launch(); const ctx = await b.newContext({...devices['Pixel 7']}); const p = await ctx.newPage();
+const errs=[]; p.on('pageerror',e=>errs.push(e.message)); p.on('console',m=>m.type()==='error'&&errs.push(m.text()));
+await p.goto('https://s-cyber8.github.io/day-quest/'); 
+const sw = await p.evaluate(async()=>{const r=await navigator.serviceWorker.ready; return r.active?.state});
+await p.waitForTimeout(3000);
+await ctx.setOffline(true); await p.reload(); await p.waitForTimeout(1500);
+console.log({sw, offlineMap: await p.locator('[data-screen=map]').count(), nodeImg: await p.evaluate(()=>[...document.images].every(i=>i.complete&&i.naturalWidth>0)), errs});
+await p.getByTestId('node-1').click(); await p.waitForTimeout(1200);
+console.log('announce offline:', await p.locator('[data-screen=announce] img.pic').evaluate(i=>i.naturalWidth));
+await b.close();

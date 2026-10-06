@@ -3,7 +3,8 @@ import { PHRASES, PHRASE_IDS } from '../content/phrases';
 import { STATIONS, stationById } from '../content/stations';
 import { settings, saveSettings, day, saveDay, loadLog, resetToday, resetEverything, recPut, recDel, recKeys, recGet, Rec } from '../core/storage';
 import { applyVolume, sfx } from '../core/audio';
-import { speak, stopSpeaking, hasHebrewVoice } from '../core/speech';
+import { speak, stopSpeaking, hasHebrewVoice, testSound, dropRecordingCache } from '../core/speech';
+import { resetProg, getProg } from '../core/storage';
 import { currentStation } from './map';
 
 const WD = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
@@ -18,6 +19,7 @@ function pickMime(): string {
 export function renderParent(onClose: () => void, apply: () => void): HTMLElement {
   const root = h('div', { class: 'parent', 'data-screen': 'parent', 'data-testid': 'parent' });
   const section = (t: string) => root.append(h('h2', {}, t));
+  const row = (label: string, ctl: HTMLElement) => root.append(h('div', { class: 'row' }, h('label', {}, label), ctl));
   const close = () => { stopSpeaking(); saveSettings(); apply(); onClose(); };
 
   root.append(h('div', { class: 'topbtns' }, h('button', { class: 'pbtn on', 'data-testid': 'parent-close', onclick: close }, 'סגירה וחזרה')), h('h1', {}, 'אזור הורים'));
@@ -49,7 +51,7 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
 
   // --- settings
   section('הגדרות');
-  const row = (label: string, ctl: HTMLElement) => root.append(h('div', { class: 'row' }, h('label', {}, label), ctl));
+  
   const vol = h('input', { type: 'range', min: '0', max: '1', step: '0.05', value: String(settings.volume), 'data-testid': 'volume' }) as HTMLInputElement;
   vol.oninput = () => { settings.volume = +vol.value; applyVolume(); }; vol.onchange = () => { saveSettings(); sfx.chime(0); };
   row('עוצמת קול', vol);
@@ -71,6 +73,23 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
   const rm = h('input', { type: 'checkbox', style: 'width:26px;height:26px', 'data-testid': 'rm' }) as HTMLInputElement; rm.checked = settings.reducedMotion;
   rm.onchange = () => { settings.reducedMotion = rm.checked; saveSettings(); apply(); };
   row('הפחתת תנועה (מצב רגוע במיוחד)', rm);
+
+  // --- game levels
+  section('רמות המשחקים');
+  root.append(h('div', { class: 'help' }, 'כל משחק מתחיל ברמה 2 כברירת מחדל ומתאים את עצמו: שתי הצלחות ברצף מעלות רמה, שתי כישלונות מורידות. כאן אפשר לקבוע רמת התחלה לכל משחק.'));
+  STATIONS.forEach((s) => {
+    const sel = h('select', { 'data-testid': 'lvl-' + s.game }, ...[1, 2, 3].map((n) => h('option', { value: String(n) }, 'רמה ' + n))) as HTMLSelectElement;
+    sel.value = String(settings.startLevel[s.game] ?? 2);
+    sel.onchange = () => { settings.startLevel[s.game] = +sel.value; saveSettings(); };
+    const cur = getProg(s.game);
+    row(`${s.id}. ${s.label} (עכשיו: רמה ${cur.level})`, sel);
+  });
+  root.append(h('div', { class: 'topbtns' }, h('button', { class: 'pbtn danger', 'data-testid': 'reset-levels', onclick: () => { resetProg(); close(); } }, 'איפוס כל הרמות')));
+
+  // --- sound test
+  section('בדיקת צליל');
+  const rep = h('div', { class: 'help', 'data-testid': 'sound-report' }, 'לחצו כדי לשמוע קטע דיבור וצליל, ולראות באיזו דרך הושמע הדיבור.');
+  root.append(h('div', { class: 'topbtns' }, h('button', { class: 'pbtn on', 'data-testid': 'test-sound', onclick: async () => { rep.textContent = 'מנגן…'; rep.textContent = await testSound(); } }, 'בדיקת צליל')), rep);
 
   // --- voice
   section('הקלטת קולות (אופציונלי)');
@@ -97,14 +116,14 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
           recorder.onstop = async () => {
             stream.getTracks().forEach((t) => t.stop());
             const type = recorder?.mimeType || mime || 'audio/mp4'; recorder = null;
-            await recPut(id, { blob: new Blob(chunks, { type }), mime: type } as Rec); renderPhrases();
+            await recPut(id, { blob: new Blob(chunks, { type }), mime: type } as Rec); dropRecordingCache(id); renderPhrases();
           };
           recorder.start(); recBtn.textContent = 'עצור'; recBtn.classList.add('recording');
         } catch { recBtn.textContent = 'אין הרשאת מיקרופון'; }
       };
       const play = h('button', { onclick: () => speak(id), 'data-testid': 'play-' + id }, 'השמע');
-      const del = h('button', { onclick: async () => { await recDel(id); renderPhrases(); } }, 'מחק');
-      phrases.append(h('div', { class: 'phr' }, h('div', { class: 'tx' }, (has ? '● ' : '') + ph.text), h('div', { class: 'acts' }, recBtn, play, has ? del : null)));
+      const del = h('button', { onclick: async () => { await recDel(id); dropRecordingCache(id); renderPhrases(); } }, 'מחק');
+      phrases.append(h('div', { class: 'phr' }, h('div', { class: 'tx' }, (has ? '● ' : '') + (ph.speaker === 'moka' ? '[מוקה] ' : '') + ph.text), h('div', { class: 'acts' }, recBtn, play, has ? del : null)));
     }
   };
   renderPhrases(); void recGet;
@@ -115,7 +134,7 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
   if (!log.length) root.append(h('div', { class: 'log' }, 'אין עדיין נתונים'));
   log.forEach((d) => root.append(h('div', { class: 'log', 'data-testid': 'log-day' },
     h('b', {}, d.key), h('div', {}, `תחנות שהושלמו: ${d.stations.length ? d.stations.map((i) => stationById(i).label).join(', ') : '—'}`),
-    ...d.calm.map((c) => h('div', {}, `פינה שקטה (${c.auto ? 'אוטומטי' : 'ביוזמת רפאל'}) ${new Date(c.t).toTimeString().slice(0, 5)} · ${c.activity.split('+').map((a) => ACT[a] ?? a).join(', ')} · לפני: ${FEEL[c.before] ?? c.before} · אחרי: ${FEEL[c.after] ?? c.after}${c.medal ? ' · מדליה' : ''}`)))));
+    ...d.calm.map((c) => h('div', {}, `פינה שקטה ${new Date(c.t).toTimeString().slice(0, 5)} · ${c.activity.split('+').map((a) => ACT[a] ?? a).join(', ')} · כניסה: ${c.source === 'self' || (!c.auto && !c.source) ? 'ביוזמת רפאל' : c.source === 'fails' ? 'אחרי ניסיונות במשחק' : 'הצעה אוטומטית'} · אחרי: ${FEEL[c.after] ?? c.after}${c.medal ? ' · מדליה' : ''}`)))));
   let armed = '';
   const dangerBtn = (label: string, key: string, fn: () => void, id: string) => {
     const b = h('button', { class: 'pbtn danger', 'data-testid': id }, label);

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { adv, shot, center, hold, newApp, SOLVERS, rageTaps } from './helpers';
+import { adv, shot, center, hold, newApp, PASS, rageTaps } from './helpers';
 import { STATIONS } from '../src/content/stations';
 
 test.describe.configure({ mode: 'serial' });
@@ -30,12 +30,13 @@ test('full day: 13 stations, parent confirms, mini-games, night mode', async ({ 
     await adv(page, 1500);
     await shot(page, info, `st${n}-c-celebrate`);
     await adv(page, 4500);
-    await expect(page.locator(`[data-game=${s.game}]`)).toBeVisible();
+    await expect(page.locator(`[data-game=${s.game}][data-level="2"]`)).toBeVisible();
     await adv(page, 1500);
     await shot(page, info, `st${n}-d-game-start`);
-    await SOLVERS[s.game](page);
+    await PASS[s.game](page, 2);
+    await adv(page, 1500);
     await shot(page, info, `st${n}-e-game-end`);
-    await adv(page, 2500);
+    await adv(page, 5000);
     if (s.id < 13) {
       await expect(page.locator('[data-screen=map]')).toBeVisible({ timeout: 15000 });
       await adv(page, 3000);
@@ -52,6 +53,7 @@ test('full day: 13 stations, parent confirms, mini-games, night mode', async ({ 
 });
 
 test('calm corner: rage taps -> prompt -> activities -> feelings -> bridge -> medal', async ({ page }, info) => {
+  await page.addInitScript(() => { navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('denied', 'NotAllowedError')); });
   await newApp(page);
   await page.getByTestId('node-1').click();
   await expect(page.locator('[data-screen=announce]')).toBeVisible();
@@ -62,8 +64,7 @@ test('calm corner: rage taps -> prompt -> activities -> feelings -> bridge -> me
   await page.getByTestId('calm-yes').click();
   await expect(page.getByTestId('calm')).toBeVisible();
   await adv(page, 800);
-  await shot(page, info, 'calm-2-feel-before');
-  await page.getByTestId('feel-upset').click();
+  await expect(page.getByTestId('feel-upset')).toHaveCount(0); // no feelings question on entry
   await expect(page.getByTestId('act-water')).toBeVisible();
   await shot(page, info, 'calm-3-pick');
   // water: hold the glass until empty
@@ -97,7 +98,7 @@ test('calm corner: rage taps -> prompt -> activities -> feelings -> bridge -> me
   await expect(page.getByTestId('calm-prompt')).toHaveCount(0);
   // pet + breathing (fallback or mic) via the cloud
   await page.getByTestId('cloud').click();
-  await adv(page, 600); await page.getByTestId('feel-meh').click();
+  await adv(page, 600);
   await page.getByTestId('act-pet').click();
   const p = await center(page.getByTestId('pet'));
   await page.mouse.move(p.x - 40, p.y); await page.mouse.down();
@@ -116,7 +117,6 @@ test('calm corner: rage taps -> prompt -> activities -> feelings -> bridge -> me
   await expect(page.getByTestId('feel-calm')).toBeVisible();
   await page.getByTestId('feel-calm').click(); await adv(page, 2500);
   await page.getByTestId('bridge-skip').click(); await adv(page, 5000);
-  await page.getByTestId('go').click({ trial: true });
 });
 
 test('offline after first load + layout checks + RTL', async ({ page, context, browserName }, info) => {
