@@ -206,7 +206,7 @@ export const PASS: Record<string, Fn> = {
 export const FAIL: Record<string, Fn> = {
   async wake(page, level) {
     if (level === 1) for (let i = 0; i < 6; i++) { await page.getByTestId('w-clock').click(); await adv(page, 300); }
-    else if (level === 2) for (let i = 0; i < 5; i++) { await page.getByTestId('w-av').click(); await adv(page, 300); }
+    else if (level === 2) for (let i = 0; i < 7; i++) { await page.getByTestId('w-av').click(); await adv(page, 300); }
     else { const seq = await dset(page, 'simon'); for (let i = 0; i < 3; i++) { await adv(page, 9500); await page.getByTestId('pad-' + ((Number(seq[0]) + 1) % 4)).click(); await adv(page, 400); } }
   },
   async teeth(page) {

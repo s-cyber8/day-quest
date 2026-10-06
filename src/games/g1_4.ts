@@ -20,8 +20,8 @@ export const wake: Game = (ctx) => {
   const cl = (side: 'left' | 'right') => { const c = el('abs bar'); Object.assign(c.style, { top: '0', bottom: '0', width: '51%', [side]: '0', background: 'repeating-linear-gradient(90deg,#ffb3c1 0 16px,#ffc9d4 16px 32px)' }); return c; };
   const cL = cl('left'), cR = cl('right'); win.append(sun, cL, cR); win.dataset.t = '1'; win.dataset.testid = 'w-curtains';
   const clock = put(el('abs', P.clock()), W * 0.22, H * 0.52, ctx.size(100)); clock.dataset.t = '1'; clock.dataset.testid = 'w-clock';
-  const av = el('abs'); av.append(avatarImg('rafael-football', Math.min(H * 0.34, 260)));
-  Object.assign(av.style, { left: '58%', bottom: '2%', transform: 'translateX(-50%)', transformOrigin: '50% 100%', transition: 'transform .5s cubic-bezier(.3,1.6,.5,1)' }); av.dataset.t = '1'; av.dataset.testid = 'w-av';
+  const av = el('abs'); av.append(avatarImg('rafael-football', Math.min(H * 0.3, 230)));
+  Object.assign(av.style, { left: '58%', bottom: '66px', transform: 'translateX(-50%)', transformOrigin: '50% 100%', transition: 'transform .5s cubic-bezier(.3,1.6,.5,1)' }); av.dataset.t = '1'; av.dataset.testid = 'w-av';
   root.append(win, clock, av);
   const steps = ctx.level === 1 ? ['curtains', 'stretch'] : ['curtains', 'clock', 'stretch'];
   // order strip (pictures, no words)
@@ -56,7 +56,7 @@ export const wake: Game = (ctx) => {
     ].map((p, i) => {
       const e = el('abs'); const sz = Math.min(W * 0.4, 160);
       put(e, W / 2 + (i % 2 ? 1 : -1) * (sz * 0.58), H * 0.3 + Math.floor(i / 2) * (sz * 1.15), sz, sz);
-      Object.assign(e.style, { background: p.c, borderRadius: '34px', boxShadow: 'var(--shadow)', padding: '16%', transition: 'transform .25s, filter .25s' });
+      Object.assign(e.style, { background: p.c, borderRadius: '34px', boxShadow: 'var(--shadow)', padding: '12px', transition: 'transform .25s, filter .25s' });
       e.innerHTML = p.html; e.dataset.t = '1'; e.dataset.testid = 'pad-' + i; root.append(e); return e;
     });
     const seq = Array.from({ length: 4 }, () => Math.floor(Math.random() * 4));

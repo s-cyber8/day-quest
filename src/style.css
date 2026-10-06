@@ -292,3 +292,16 @@ body:has(.prompt) #caption, body:has(.calm) #caption, body[data-view=night] #cap
 .retry .choices { display: flex; gap: 16px; width: 100%; max-width: 440px; }
 .retry .choices button { flex: 1; min-height: 120px; border-radius: 30px; background: #fff; box-shadow: var(--shadow); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; font-size: 22px; font-weight: 700; color: var(--ink); }
 .retry .choices button svg { width: 56px; height: 56px; }
+
+/* in games the caption lives in the header strip (between thumbnail and back button) so it never covers play space */
+body[data-view=game] #caption { top: calc(var(--sat) + 10px); left: 136px; right: 100px; width: auto; max-width: none; transform: translateY(-6px); font-size: 17px; line-height: 1.2; padding: 8px 10px; border-radius: 18px; max-height: 78px; overflow: hidden; }
+body[data-view=game] #caption.show { transform: none; }
+/* the "go do it" screen already shows its own text */
+body[data-view=godo] #caption { display: none; }
+.godo { padding-top: calc(var(--sat) + 100px); }
+@media (max-height: 740px) {
+  .godo .card.small { max-width: 230px; }
+  .godo .mokabig { width: 112px; }
+  .godo .hint { font-size: 18px; }
+  .hold { width: 104px; height: 104px; }
+}

@@ -4,7 +4,13 @@ import { adv, newApp, openGame, shot, hold, center, GAMES, items } from './helpe
 /** No chrome button may overlap another button, the caption, the thumbnail, or content. */
 async function audit(page: Page, label: string) {
   const res = await page.evaluate(() => {
-    const vis = (e: Element) => { const r = e.getBoundingClientRect(); const cs = getComputedStyle(e); return r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity > 0.05; };
+    const vis = (e: Element) => {
+      const r = e.getBoundingClientRect(); const cs = getComputedStyle(e);
+      if (!(r.width > 1 && r.height > 1 && cs.visibility !== 'hidden' && cs.display !== 'none' && +cs.opacity > 0.05)) return false;
+      // occluded by a full-screen overlay (e.g. the map under the calm corner)? then it is not on screen
+      const top = document.elementFromPoint(Math.min(innerWidth - 1, Math.max(0, r.left + r.width / 2)), Math.min(innerHeight - 1, Math.max(0, r.top + r.height / 2)));
+      return !!top && (e === top || e.contains(top) || top.contains(e));
+    };
     const R = (e: Element) => e.getBoundingClientRect();
     const hit = (a: DOMRect, b: DOMRect) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 3 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 3;
     const fixed = ['#back', '#cloud'].map((s) => document.querySelector(s)).filter((e): e is Element => !!e && vis(e));

@@ -16,18 +16,16 @@ export const build: Game = (ctx) => {
   if (ctx.level === 1) return mode('free');
   // choose a mode
   ctx.say('g.9.choose');
-  const mk = (label: string, html: string, which: 'free' | 'copy', y: number) => {
-    const b = h('button', { class: 'tile', 'data-testid': 'mode-' + which, 'data-t': '1', style: `position:absolute;left:50%;top:${y}px;transform:translateX(-50%);width:min(70%,260px)` }, h('div', { class: 'ic' }), h('div', {}, label));
+  const wrap = el('abs'); Object.assign(wrap.style, { inset: '0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '16px', zIndex: '5' });
+  const mk = (label: string, html: string, which: 'free' | 'copy') => {
+    const b = h('button', { class: 'tile', 'data-testid': 'mode-' + which, 'data-t': '1', style: 'width:min(70%,240px);min-height:0;padding:8px' }, h('div', { class: 'ic', style: 'width:64px;height:64px' }), h('div', {}, label));
     (b.firstChild as HTMLElement).innerHTML = html;
-    b.onclick = () => { sfx.tap(); box.forEach((x) => x.remove()); mode(which); };
+    b.onclick = () => { sfx.tap(); wrap.remove(); mode(which); };
     return b;
   };
-  const box = [
-    mk('בונים חופשי', P.tile('tri', COLS[1]), 'free', ctx.H * 0.12),
-    mk('כמו בתמונה', P.tile('sq', COLS[0]), 'copy', ctx.H * 0.42),
-  ];
-  box.forEach((b) => ctx.root.append(b));
-  ctx.hand(() => ({ kind: 'tap', at: { x: ctx.W / 2, y: ctx.H * 0.2 } }));
+  wrap.append(mk('בונים חופשי', P.tile('tri', COLS[1]), 'free'), mk('כמו בתמונה', P.tile('sq', COLS[0]), 'copy'));
+  ctx.root.append(wrap);
+  ctx.hand(() => ({ kind: 'tap', at: { x: ctx.W / 2, y: ctx.H * 0.36 } }));
 
   function mode(which: 'free' | 'copy') {
     const { root, W, H } = ctx;
