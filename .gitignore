@@ -9,3 +9,4 @@ scripts/audition/
 audio-work/
 flagged.json
 *.log
+__pycache__/
