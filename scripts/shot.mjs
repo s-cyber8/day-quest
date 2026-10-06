@@ -1,0 +1,12 @@
+import { webkit, chromium, devices } from '@playwright/test';
+const [,, dev = 'iPhone 13', out = 'screenshots/_x.png'] = process.argv;
+const d = devices[dev];
+const b = await (dev.includes('iPhone') ? webkit : chromium).launch();
+const ctx = await b.newContext({ ...d });
+const p = await ctx.newPage();
+p.on('console', (m) => m.type() === 'error' && console.log('console error:', m.text()));
+p.on('pageerror', (e) => console.log('pageerror:', e.message));
+await p.goto('http://localhost:4173/day-quest/');
+await p.waitForTimeout(2500);
+await p.screenshot({ path: out });
+await b.close();
