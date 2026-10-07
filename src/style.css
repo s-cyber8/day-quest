@@ -306,3 +306,7 @@ body[data-view=godo] #caption { display: none; }
   .hold { width: 104px; height: 104px; }
 }
 .node .star.nostars .sn { color: #2f7a52; }
+.night .nightgo { background: rgba(255,255,255,.14); color: #cfd8ff; box-shadow: none; margin-top: 4px; }
+.night .nightgo svg { width: 46%; height: 46%; }
+.node.open { opacity: .92; }
+.node.done { opacity: 1; }

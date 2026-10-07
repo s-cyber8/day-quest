@@ -189,8 +189,8 @@ export const PASS: Record<string, Fn> = {
       if (await page.getByTestId('celebrate').count()) return;
       const part = await dset(page, 'part'); if (!part) { await adv(page, 500); continue; }
       const ring = page.locator(`.stage [data-part=${part}]`).first(); const c = await center(ring);
-      await page.mouse.move(c.x - 35, c.y); await page.mouse.down();
-      for (let i = 0; i < 6; i++) { await page.mouse.move(c.x + 35, c.y, { steps: 6 }); await page.mouse.move(c.x - 35, c.y, { steps: 6 }); }
+      await page.mouse.move(c.x - 22, c.y); await page.mouse.down();
+      for (let i = 0; i < 9; i++) { await page.mouse.move(c.x + 22, c.y, { steps: 6 }); await page.mouse.move(c.x - 22, c.y, { steps: 6 }); }
       await page.mouse.up(); await adv(page, 1600);
     }
   },
@@ -275,10 +275,10 @@ export const FAIL: Record<string, Fn> = {
   async bath(page) {
     await adv(page, 3000);
     for (let k = 0; k < 12; k++) {
-      const part = await dset(page, 'part'); const other = ['head', 'hands', 'tummy', 'feet'].find((p) => p !== part)!;
+      const part = await dset(page, 'part'); const other = ['head', 'hands', 'tummy', 'ears', 'shoulders'].find((p) => p !== part)!;
       const c = await center(page.locator(`.stage [data-part=${other}]`).first());
-      await page.mouse.move(c.x - 35, c.y); await page.mouse.down();
-      for (let i = 0; i < 4; i++) { await page.mouse.move(c.x + 35, c.y, { steps: 6 }); await page.mouse.move(c.x - 35, c.y, { steps: 6 }); }
+      await page.mouse.move(c.x - 22, c.y); await page.mouse.down();
+      for (let i = 0; i < 6; i++) { await page.mouse.move(c.x + 22, c.y, { steps: 6 }); await page.mouse.move(c.x - 22, c.y, { steps: 6 }); }
       await page.mouse.up(); await adv(page, 2200);
       if (await page.getByTestId('retry').or(page.getByTestId('calm-prompt')).count()) return;
     }

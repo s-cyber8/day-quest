@@ -57,7 +57,7 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
   row('עוצמת קול', vol);
   const unlock = h('input', { type: 'time', value: settings.unlock, 'data-testid': 'unlock-time' }) as HTMLInputElement;
   unlock.onchange = () => { if (unlock.value) { settings.unlock = unlock.value; saveSettings(); } };
-  row('שעת פתיחה בבוקר (אחרי הלילה)', unlock);
+  row('היום החדש מתחיל ב־ (ההתקדמות מתאפסת אוטומטית)', unlock);
   const pin = h('input', { type: 'password', inputmode: 'numeric', maxlength: '4', placeholder: 'ללא', value: settings.pin, 'data-testid': 'pin-input' }) as HTMLInputElement;
   pin.onchange = () => { const v = pin.value.replace(/\D/g, '').slice(0, 4); if (v.length === 4 || v === '') { settings.pin = v; saveSettings(); } else pin.value = settings.pin; };
   row('קוד הורה (4 ספרות, ריק = ללא)', pin);
@@ -151,6 +151,7 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
     h('br'), h('b', {}, 'התקנה באנדרואיד: '), 'ב-Chrome ← תפריט (שלוש נקודות) ← "התקן אפליקציה" / "הוסף למסך הבית". ',
     h('br'), 'אחרי הפתיחה הראשונה האפליקציה עובדת גם בלי אינטרנט (מצב טיסה).',
     h('br'), h('b', {}, 'להישאר באפליקציה: '), 'באייפון – הגדרות ← נגישות ← גישה מודרכת (Guided Access), ואז לחיצה שלישית על כפתור הצד. באנדרואיד – הגדרות ← אבטחה ← הצמדת אפליקציה (Screen pinning), ואז מסך האפליקציות האחרונות ← סמל האפליקציה ← "הצמד".',
-    h('br'), h('b', {}, 'מהלך תחנה: '), 'הכרזה ← רפאל עושה את המשימה באמת ← ההורה לוחץ ארוכות על הכפה (3 שניות) ← חגיגה ומשחק קצר.'));
+    h('br'), h('b', {}, 'מהלך תחנה: '), 'הכרזה ← רפאל עושה את המשימה באמת ← ההורה לוחץ ארוכות על הכפה (3 שניות) ← התחנה הושלמה, וחגיגה ומשחק קצר שמרוויח כוכבים (אפשר לצאת מהמשחק בכל רגע).',
+    h('br'), h('b', {}, 'סדר חופשי: '), 'כל התחנות במפה פתוחות בכל זמן ובכל סדר. התחנה הבאה לפי הסדר זוהרת ורפאל עומד בה, כדי שהשגרה תישאר צפויה. אפשר לשחק שוב תחנות שהושלמו כדי לאסוף כוכבים. אין נעילה בלילה: אחרי תחנת השינה יש סצנת לילה רגועה, וכל נגיעה (או כפתור החזרה) חוזרת למפה. ההתקדמות מתאפסת אוטומטית בשעת "היום החדש מתחיל".'));
   return root;
 }

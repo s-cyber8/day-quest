@@ -63,18 +63,15 @@ async function openParent() {
   if (!(await askGate())) return;
   stopSpeaking(); setFrustrationEnabled(false);
   let popped = false;
-  const close = () => { if (popped) return; popped = true; parent.remove(); cloudBtn().hidden = false; document.body.dataset.view = ''; if (day.night) showNight(false); else showMap(); };
+  const close = () => { if (popped) return; popped = true; parent.remove(); cloudBtn().hidden = false; document.body.dataset.view = ''; showMap(); };
   const parent = renderParent(close, applyRM);
   document.body.append(parent); cloudBtn().hidden = true; document.body.dataset.view = 'parent'; setBase(close);
 }
 
+/** Calm ending after the bedtime station: no lock. Any tap or the back button returns to the map. */
 function showNight(fresh: boolean) {
   setFrustrationEnabled(false);
-  day.night = true; saveDay();
-  setScreen(renderNight(fresh, async () => {
-    if (!(await askGate())) return;
-    day.night = false; saveDay(); showMap();
-  }), null);
+  setScreen(renderNight(fresh, () => { stopSpeaking(); showMap(); }), () => { stopSpeaking(); showMap(); });
 }
 
 // ---------------- station flow (cancellable: the back button leaves at any moment) ----------------
@@ -249,12 +246,12 @@ async function boot() {
   document.addEventListener('touchmove', (e) => { if (!(e.target as Element).closest?.('.mapscroll, .parent, .sticker')) e.preventDefault(); }, { passive: false });
   matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', applyRM);
 
-  // new day (morning unlock)
+  // new day: progress resets at the configured time (nothing is ever locked)
   const tickDay = () => { if (rollDay()) { stopSpeaking(); flow.cancelled = true; document.querySelectorAll('.parent,.pad,.celebrate,.calm,.prompt,.retry').forEach((n) => n.remove()); showMap(); speak('morning.1'); } };
   setInterval(tickDay, 15000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tickDay(); });
 
-  if (day.night) showNight(false); else showMap();
+  showMap();
   registerSW({ immediate: true });
   void logCalm; void PHRASES;
 }

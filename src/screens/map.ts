@@ -33,14 +33,15 @@ export function renderMap(hooks: MapHooks, from?: Station): HTMLElement {
   inner.append(road);
   vis.forEach((s, i) => {
     const done = day.done.includes(s.id), isCur = cur?.id === s.id;
-    const n = h('button', { class: 'node' + (isCur ? ' current' : done ? '' : ' future'), 'data-testid': 'node-' + s.id, 'aria-label': s.label, style: `left:${pos[i].x}%;top:${pos[i].y}px` },
+    const n = h('button', { class: 'node' + (isCur ? ' current' : done ? ' done' : ' open'), 'data-testid': 'node-' + s.id, 'aria-label': s.label, style: `left:${pos[i].x}%;top:${pos[i].y}px` },
       h('img', { class: 'thumb', src: imgOf(s), alt: '', draggable: 'false' }), h('div', { class: 'num' }, String(s.id)));
     if (done) {
       const st = day.stars[s.id] ?? 0;
       const sw = h('div', { class: 'star' + (st ? '' : ' nostars'), 'data-stars': String(st) }, frag(P.star(st ? '#ffd966' : '#c9e8d4')), h('span', { class: 'sn' }, st ? String(st) : '✓'));
       n.append(sw);
     }
-    if (isCur || done) { n.dataset.t = '1'; n.addEventListener('click', () => { sfx.tap(); hooks.onStation(s); }); } // done stations: replay the game for stars
+    // every station is open at any time, in any order; the next one in the routine just glows. Done stations replay for stars.
+    n.dataset.t = '1'; n.addEventListener('click', () => { sfx.tap(); hooks.onStation(s); });
     inner.append(n);
   });
   // hero + Moka

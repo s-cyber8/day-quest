@@ -4,10 +4,9 @@ import { mokaSvg } from '../art/moka';
 import { asset } from '../content/stations';
 import { sfx } from '../core/audio';
 import { speak } from '../core/speech';
-import { holdButton } from './ui';
 
 /** Starry night, locked until morning. `fresh` = just finished the day (plays the lullaby once). */
-export function renderNight(fresh: boolean, onUnlock: () => void): HTMLElement {
+export function renderNight(fresh: boolean, onDone: () => void): HTMLElement {
   const n = h('div', { class: 'night', 'data-screen': 'night', 'data-testid': 'night' });
   for (let i = 0; i < 46; i++) {
     const s = h('i', { class: 'star' }); const sz = rand(2, 5);
@@ -22,7 +21,9 @@ export function renderNight(fresh: boolean, onUnlock: () => void): HTMLElement {
     h('div', { class: 'mokan' }, mokaSvg('sleepy')));
   n.append(h('div', { class: 'moon' }), scene,
     h('div', { class: 'msg' }, 'לילה טוב רפאל. נתראה בבוקר'),
-    h('div', { class: 'unlock' }, holdButton(onUnlock, { caption: 'הורה: פתיחה' })));
+    h('button', { class: 'rbtn nightgo', 'data-testid': 'night-continue', 'aria-label': 'המשך', onclick: () => onDone() }, frag(P.play())));
+  // any tap continues (after a short pause so the tap that ended the game does not skip the scene)
+  setTimeout(() => n.addEventListener('click', () => onDone()), 900);
   if (fresh) {
     setTimeout(() => { sfx.lullaby(); }, 600);
     speak('night.1', 'night.2');

@@ -15,7 +15,6 @@ const RAW = path.join(ROOT, 'audio-work/raw'), OUT = path.join(ROOT, 'public/aud
 const LEDGER = path.join(ROOT, 'audio-work/ledger.json');
 const CONFIG = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/voice-config.json'), 'utf8'));
 const NIQQUD: Record<string, string> = fs.existsSync(path.join(ROOT, 'scripts/niqqud.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/niqqud.json'), 'utf8')) : {};
-const OVERRIDES: Record<string, string> = fs.existsSync(path.join(ROOT, 'scripts/tts-overrides.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/tts-overrides.json'), 'utf8')) : {};
 const STOP = 8500;
 
 fs.mkdirSync(RAW, { recursive: true }); fs.mkdirSync(OUT, { recursive: true });
@@ -27,9 +26,8 @@ const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manife
 /** pronunciation text: explicit `tts` field, else the display text with per-word niqqud from scripts/niqqud.json */
 export function ttsText(id: string): string {
   const ph = PHRASES[id];
-  if (OVERRIDES[id]) return OVERRIDES[id]; // per-phrase pointed text added after the CER check
-  if (ph.tts) return ph.tts;
-  return ph.text.split(/(\s+)/).map((w) => { const bare = w.replace(/[.,!?:;…]+$/g, ''); const tail = w.slice(bare.length); return (NIQQUD[bare] ?? bare) + tail; }).join('');
+  // `tts` (pointed, gender-safe) from phrases.ts; unpointed words that appear in scripts/niqqud.json (e.g. the name) get their niqqud too
+  return (ph.tts ?? ph.text).split(/(\s+)/).map((w) => { const bare = w.replace(/[.,!?:;…]+$/g, ''); const tail = w.slice(bare.length); return (NIQQUD[bare] ?? bare) + tail; }).join('');
 }
 const voiceFor = (speaker: string) => CONFIG[speaker];
 const hashOf = (id: string) => { const v = voiceFor(PHRASES[id].speaker); return crypto.createHash('sha1').update(JSON.stringify([ttsTextFinal(id), v.voice_id, v.model, v.settings, v.tags ?? ''])).digest('hex').slice(0, 12); };

@@ -76,3 +76,26 @@ for (const game of GAMES) {
     }
   });
 }
+
+test('bath: Rafael in the tub, all five scrub zones are reachable (inside the stage, clear of back button and cloud)', async ({ page }, info) => {
+  await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = ':root{--sat:47px;--sab:34px}'; document.head.append(s); }); });
+  await openGame(page, 'bath', 2);
+  await adv(page, 3000);
+  await expect(page.getByTestId('bath-boy')).toBeVisible();
+  const st = (await page.locator('.stage').boundingBox())!;
+  const zones = JSON.parse(await page.evaluate(() => (document.querySelector('.stage') as HTMLElement).dataset.parts!)) as Record<string, { x: number; y: number }[]>;
+  expect(Object.keys(zones).sort()).toEqual(['ears', 'hands', 'head', 'shoulders', 'tummy']);
+  const cloud = (await page.getByTestId('cloud').boundingBox())!, back = (await page.getByTestId('back').boundingBox())!;
+  const boy = (await page.getByTestId('bath-boy').boundingBox())!;
+  for (const [k, pts] of Object.entries(zones)) for (const p of pts) {
+    const ax = st.x + p.x, ay = st.y + p.y;
+    expect(ax, k).toBeGreaterThan(st.x + 20); expect(ax, k).toBeLessThan(st.x + st.width - 20);
+    expect(ay, k).toBeGreaterThan(st.y + 20); expect(ay, k).toBeLessThan(st.y + st.height - 20);
+    expect(ax >= cloud.x && ax <= cloud.x + cloud.width && ay >= cloud.y && ay <= cloud.y + cloud.height, k + ' under cloud').toBe(false);
+    expect(ax >= back.x && ax <= back.x + back.width && ay >= back.y && ay <= back.y + back.height, k + ' under back').toBe(false);
+    expect(ax, k).toBeGreaterThan(boy.x); expect(ax, k).toBeLessThan(boy.x + boy.width); expect(ay, k).toBeGreaterThan(boy.y); expect(ay, k).toBeLessThan(boy.y + boy.height);
+  }
+  await page.waitForTimeout(600);
+  await page.evaluate(() => document.querySelectorAll('.stage [data-part]').forEach((r) => ((r as HTMLElement).style.opacity = '1')));
+  await shot(page, info, 'lay-bath-zones');
+});

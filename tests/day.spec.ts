@@ -47,8 +47,10 @@ test('full day: 13 stations, parent confirms, mini-games, night mode', async ({ 
   await expect(page.getByTestId('night')).toBeVisible();
   await page.waitForTimeout(3500);
   await shot(page, info, '99-night');
-  // night stays locked on reload
-  await page.reload(); await expect(page.getByTestId('night')).toBeVisible();
+  // no lock: the back button (or any tap) returns to the map, and a reload lands on the map too
+  await expect(page.getByTestId('back')).toBeVisible();
+  await page.getByTestId('back').click(); await expect(page.locator('[data-screen=map]')).toBeVisible();
+  await page.reload(); await expect(page.locator('[data-screen=map]')).toBeVisible();
   expect(errors, errors.join('\n')).toEqual([]);
 });
 
@@ -153,6 +155,9 @@ test('parent mode: gate, PIN, weekday stations, voice recording + playback prior
   await expect(page.getByTestId('parent')).toBeVisible();
   await page.waitForTimeout(500); await shot(page, info, 'parent-1-top');
   // deactivate station 8 for today's weekday
+  // the app's "today" is the day key (it starts at the configured morning time, not at midnight): pick that weekday tab
+  const wd = await page.evaluate(() => new Date(JSON.parse(localStorage.getItem('dq.day')!).key + 'T12:00:00').getDay());
+  await page.locator('.parent .tabs button').nth(wd).click();
   await page.getByTestId('st-8').uncheck();
   await page.getByTestId('pin-input').fill('1234'); await page.getByTestId('pin-input').dispatchEvent('change');
   await page.getByTestId('rec-st.1.announce').scrollIntoViewIfNeeded();

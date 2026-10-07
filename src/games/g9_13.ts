@@ -198,29 +198,49 @@ export const dinner: Game = (ctx) => {
   }
 };
 
-/* 12 — Bath: scrub the body part the narrator names. L3 adds a generous per-part timer. */
+/* 12 — Bath: Rafael in the tub (waist up). Scrub the part the narrator names. L3 adds a generous per-part timer. */
 export const bath: Game = (ctx) => {
   const { root, W, H } = ctx;
   const L = ctx.level;
   ctx.budget(L === 1 ? 4 : L === 2 ? 3 : 2);
-  const hA = Math.min(H * 0.5, 330), wA = hA * (562 / 747), ax = W / 2, ay = H * 0.34;
-  const tub = put(el('abs'), W / 2, H * 0.62, Math.min(W * 0.94, 420), H * 0.3);
-  Object.assign(tub.style, { background: 'linear-gradient(#bfe6fb,#8fd0f0)', borderRadius: '30px 30px 90px 90px', boxShadow: 'var(--shadow)' });
-  const av = el('abs'); av.append(avatar(hA)); put(av, ax, ay, wA, hA); av.style.left = ax - wA / 2 + 'px';
-  root.append(av, tub);
-  const duck = put(el('abs', P.duck()), W * 0.8, H * 0.58, 76); duck.style.animation = 'bob 2.4s ease-in-out infinite'; duck.style.zIndex = '2'; root.append(duck);
-  const at = (fx: number, fy: number): Pt => ({ x: ax - wA / 2 + fx * wA, y: ay - hA / 2 + fy * hA });
+  // --- scene: wall, Rafael (cut out of the bath station picture), then water, foam and the tub rim in front of him
+  const hA = Math.min(H * 0.68, 470), wA = hA * (525 / 720), ax = W * 0.5 - wA / 2 + W * 0.02, ay = H * 0.01;
+  const waterY = ay + hA * 0.93;
+  const wall = el('abs'); Object.assign(wall.style, { inset: '0', background: 'linear-gradient(#e6f6fb,#d4eef7)', backgroundImage: 'linear-gradient(#e6f6fb,#d4eef7)' }); root.append(wall);
+  const tiles = el('abs'); tiles.innerHTML = `<svg width="${W}" height="${waterY}" style="display:block"><g stroke="#c4e4ef" stroke-width="2" fill="none">${Array.from({ length: Math.ceil(W / 70) + 1 }, (_, i) => `<path d="M${i * 70} 0V${waterY}"/>`).join('')}${Array.from({ length: Math.ceil(waterY / 70) + 1 }, (_, i) => `<path d="M0 ${i * 70}H${W}"/>`).join('')}</g></svg>`;
+  Object.assign(tiles.style, { left: '0', top: '0', width: W + 'px', height: waterY + 'px', opacity: '.8' }); root.append(tiles);
+  const img = h('img', { src: asset('avatar/rafael-bath.png'), alt: '', draggable: 'false', 'data-testid': 'bath-boy', style: `position:absolute;left:${ax}px;top:${ay}px;width:${wA}px;height:${hA}px` });
+  root.append(img);
+  const tubH = H - waterY + 40;
+  const foam = Array.from({ length: 16 }, (_, i) => { const x = (W / 15) * i + ((i * 37) % 17) - 8, r = 9 + ((i * 53) % 14); return `<circle cx="${x}" cy="${waterY + ((i * 29) % 11) - 4}" r="${r}" fill="#fff" stroke="#d6eef8" stroke-width="2"/>`; }).join('');
+  const waves = `M0 ${waterY} ` + Array.from({ length: 9 }, (_, i) => `Q${(W / 8) * (i + 0.5)} ${waterY + (i % 2 ? 8 : -8)} ${(W / 8) * (i + 1)} ${waterY}`).join(' ') + ` V${H + 40} H0 Z`;
+  const tub = el('abs', `<svg width="${W}" height="${tubH}" viewBox="0 ${waterY - 20} ${W} ${tubH}" style="display:block;overflow:visible">
+    <defs><linearGradient id="wt" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fdcf6"/><stop offset="1" stop-color="#5fb9e4"/></linearGradient></defs>
+    <rect x="-6" y="${waterY - 14}" width="${W + 12}" height="${tubH + 20}" rx="44" fill="#fff"/>
+    <rect x="-6" y="${waterY - 14}" width="${W + 12}" height="14" rx="7" fill="#eef6fa"/>
+    <path d="${waves.replace(/^M0/, 'M14').replace(/H0 Z$/, 'H14 Z')}" fill="url(#wt)" transform="translate(0 0)" clip-path="inset(0 14px 0 0)"/>
+    <g>${foam}</g></svg>`);
+  Object.assign(tub.style, { left: '0', top: waterY - 20 + 'px', width: W + 'px', height: tubH + 'px', zIndex: '3', pointerEvents: 'none' });
+  root.append(tub);
+  const duck = put(el('abs', P.duck()), W * 0.82, waterY + 22, 74); duck.style.animation = 'bob 2.4s ease-in-out infinite'; duck.style.zIndex = '4'; root.append(duck);
+  // --- hit zones, as fractions of the cutout (image is 525x720); all five are above the water line
+  const at = (fx: number, fy: number): Pt => ({ x: ax + fx * wA, y: ay + fy * hA });
   const parts: Record<string, { pts: Pt[]; id: string }> = {
-    head: { pts: [at(0.5, 0.1)], id: 'g.12.head' }, hands: { pts: [at(0.08, 0.5), at(0.93, 0.56)], id: 'g.12.hands' },
-    tummy: { pts: [at(0.5, 0.42)], id: 'g.12.tummy' }, feet: { pts: [at(0.12, 0.78), at(0.5, 0.92)], id: 'g.12.feet' },
+    head: { pts: [at(0.63, 0.3)], id: 'g.12.head' },
+    ears: { pts: [at(0.3, 0.4), at(0.95, 0.42)], id: 'g.12.ears' },
+    shoulders: { pts: [at(0.36, 0.63), at(0.85, 0.65)], id: 'g.12.shoulders' },
+    hands: { pts: [at(0.46, 0.76)], id: 'g.12.hands' },
+    tummy: { pts: [at(0.64, 0.9)], id: 'g.12.tummy' },
   };
-  const plan = L === 1 ? ['hands', 'head', 'tummy'] : L === 2 ? shuffle(['hands', 'feet', 'head', 'tummy']) : (() => { const o: string[] = []; const ks = Object.keys(parts); while (o.length < 6) { const k = ks[Math.floor(Math.random() * 4)]; if (k !== o[o.length - 1]) o.push(k); } return o; })();
-  const R = 56;
-  const rings = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, v.pts.map((p) => { const r = put(el('abs'), p.x, p.y, R * 2); Object.assign(r.style, { borderRadius: '50%', border: '5px dashed #fff', background: 'rgba(255,255,255,.18)', opacity: '0', zIndex: '3', pointerEvents: 'none' }); r.dataset.part = k; root.append(r); return r; })]));
+  const keys = Object.keys(parts);
+  const plan = L === 1 ? ['hands', 'head', 'tummy'] : L === 2 ? shuffle([...keys]) : (() => { const o: string[] = []; while (o.length < 7) { const k = keys[Math.floor(Math.random() * keys.length)]; if (k !== o[o.length - 1]) o.push(k); } return o; })();
+  root.dataset.parts = JSON.stringify(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, v.pts])));
+  const R = clamp(wA * 0.14, 36, 52);
+  const rings = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, v.pts.map((p) => { const r = put(el('abs'), p.x, p.y, R * 2); Object.assign(r.style, { borderRadius: '50%', border: '5px dashed #fff', background: 'rgba(255,255,255,.2)', opacity: '0', zIndex: '5', pointerEvents: 'none', boxShadow: '0 0 0 2px rgba(47,74,99,.18)' }); r.dataset.part = k; root.append(r); return r; })]));
   const sponge = el('abs', `<svg viewBox="0 0 100 100" class="prop"><rect x="10" y="22" width="80" height="56" rx="18" fill="#ffe066"/><g fill="#f0c940"><circle cx="30" cy="40" r="5"/><circle cx="56" cy="56" r="5"/><circle cx="70" cy="36" r="4"/></g></svg>`);
-  put(sponge, 0, 0, 90); Object.assign(sponge.style, { opacity: '0', pointerEvents: 'none', zIndex: '6' }); root.append(sponge);
+  put(sponge, 0, 0, 90); Object.assign(sponge.style, { opacity: '0', pointerEvents: 'none', zIndex: '7' }); root.append(sponge);
   const stepDots = triesBar(ctx, plan.length, 'bottom'); stepDots(plan.length);
-  let i = 0, scrub = 0, wrongDist = 0, lastWrong = 0, tLeft = 9, lx = 0, ly = 0, down = false, gap = true; // gap: between parts nothing counts
+  let i = 0, scrub = 0, wrongDist = 0, lastWrong = 0, tLeft = 9, lx = 0, ly = 0, down = false, gap = true, doneFlag = false; // gap: between parts nothing counts
   const cur = () => parts[plan[i]];
   const show = () => {
     Object.values(rings).flat().forEach((r) => (r.style.opacity = '0'));
@@ -228,11 +248,11 @@ export const bath: Game = (ctx) => {
     root.dataset.part = plan[i];
     rings[plan[i]].forEach((r) => (r.style.opacity = '1'));
     ctx.say(cur().id); tLeft = 9; scrub = 0; wrongDist = 0; gap = false;
-    ctx.hand(() => { const p = cur().pts[0]; return { kind: 'drag', from: { x: p.x - 36, y: p.y }, to: { x: p.x + 36, y: p.y } }; });
+    ctx.hand(() => { const p = cur().pts[0]; return { kind: 'drag', from: { x: p.x - 28, y: p.y }, to: { x: p.x + 28, y: p.y } }; });
   };
-  const bubbles = (p: Pt) => { for (let k = 0; k < 7; k++) { const b = put(el('abs', P.bubble()), p.x + (Math.random() - 0.5) * 70, p.y + (Math.random() - 0.5) * 40, 28 + Math.random() * 22); b.style.zIndex = '4'; b.style.transition = 'transform 2s ease-out, opacity 2s'; root.append(b); requestAnimationFrame(() => { b.style.transform = `translate(${(Math.random() - 0.5) * 80}px, ${-90 - Math.random() * 60}px)`; b.style.opacity = '0'; }); setTimeout(() => b.remove(), 2100); } };
+  const bubbles = (p: Pt) => { for (let k = 0; k < 7; k++) { const b = put(el('abs', P.bubble()), p.x + (Math.random() - 0.5) * 70, p.y + (Math.random() - 0.5) * 40, 28 + Math.random() * 22); b.style.zIndex = '6'; b.style.transition = 'transform 2s ease-out, opacity 2s'; root.append(b); requestAnimationFrame(() => { b.style.transform = `translate(${(Math.random() - 0.5) * 80}px, ${-90 - Math.random() * 60}px)`; b.style.opacity = '0'; }); setTimeout(() => b.remove(), 2100); } };
   ctx.say('g.12.how'); ctx.later(show, 2200);
-  const area = el('abs'); Object.assign(area.style, { inset: '0', zIndex: '5' }); area.dataset.t = '1'; root.append(area);
+  const area = el('abs'); Object.assign(area.style, { inset: '0', zIndex: '6' }); area.dataset.t = '1'; root.append(area);
   drag(area, {
     start: (x, y) => { lx = x; ly = y; down = true; },
     move: (x, y) => {
@@ -244,15 +264,15 @@ export const bath: Game = (ctx) => {
       if (onTarget) {
         scrub += d; wrongDist = 0;
         if (scrub > 260) { const p = cur().pts[0]; bubbles(p); sfx.pop(); sfx.sparkle(); ctx.hit(); i++; gap = true; stepDots(plan.length - i); ctx.hand(null); ctx.later(show, 1400); }
-      } else if (Object.entries(parts).some(([k, v]) => k !== plan[i] && v.pts.some((p) => Math.hypot(p.x - px, p.y - py) < R - 10))) {
+      } else if (Object.entries(parts).some(([k, v]) => k !== plan[i] && v.pts.some((p) => Math.hypot(p.x - px, p.y - py) < R - 14))) {
         wrongDist += d; if (wrongDist > 160 && performance.now() - lastWrong > 1800) { wrongDist = 0; lastWrong = performance.now(); ctx.mistake(); }
       }
     },
     end: () => { down = false; },
   });
   ctx.loop((dt) => {
-    if (L !== 3 || i >= plan.length) { if (i >= plan.length && !(ctx as unknown as { _w?: number })._w) { (ctx as unknown as { _w?: number })._w = 1; sfx.sparkle(); ctx.later(() => { ctx.praise(); ctx.win(); }, 1000); } return; }
-    if (gap) return;
+    if (i >= plan.length) { if (!doneFlag) { doneFlag = true; sfx.sparkle(); duck.style.animation = 'cheer 1s ease-in-out infinite'; ctx.later(() => { ctx.praise(); ctx.win(); }, 1000); } return; }
+    if (L !== 3 || gap) return;
     tLeft -= dt;
     rings[plan[i]].forEach((r) => (r.style.borderColor = tLeft < 3 ? '#ffb870' : '#fff'));
     if (tLeft <= 0) { tLeft = 9; ctx.mistake(); }
