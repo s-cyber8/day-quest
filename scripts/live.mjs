@@ -1,5 +1,6 @@
 import { chromium, devices } from '@playwright/test';
 const b = await chromium.launch(); const ctx = await b.newContext({ ...devices['Pixel 7'] }); const p = await ctx.newPage();
+p.setDefaultTimeout(10000); setTimeout(() => { console.log('TIMEOUT'); process.exit(1); }, 90000);
 const errs = []; p.on('pageerror', (e) => errs.push(e.message)); p.on('console', (m) => m.type() === 'error' && errs.push(m.text()));
 await p.addInitScript(() => { window.__n = 0; const st = AudioBufferSourceNode.prototype.start; AudioBufferSourceNode.prototype.start = function (...a) { window.__n++; return st.apply(this, a); }; });
 await p.goto('https://s-cyber8.github.io/day-quest/');
