@@ -1,152 +1,167 @@
-import { Game, el, put, dragItems, DragItem, inside, rel, swipePop, centerOf, shuffle, triesBar, timerBar, Pt } from './engine';
+import { Game, el, put, dragItems, DragItem, inside, rel, swipePop, centerOf, shuffle, timerBar, Pt } from './engine';
 import { P } from '../art/props';
+import { spr } from '../art/sprites';
 import { asset } from '../content/stations';
 import { sfx } from '../core/audio';
-import { h, frag } from '../core/dom';
+import { h } from '../core/dom';
 
 const avatarImg = (name: string, hgt: number) => h('img', { src: asset(`avatar/${name}.png`), style: `height:${hgt}px;display:block`, draggable: 'false' });
 const icon = (html: string, size: number) => { const e = el('', html); e.style.width = e.style.height = size + 'px'; return e; };
-const curtainsIcon = `<svg viewBox="0 0 100 100" class="prop"><rect x="8" y="12" width="84" height="76" rx="12" fill="#bfe3f7" stroke="#fff" stroke-width="6"/><rect x="8" y="12" width="40" height="76" rx="10" fill="#ffb3c1"/><rect x="52" y="12" width="40" height="76" rx="10" fill="#ffb3c1"/></svg>`;
+const avatarIcon = `<img class="prop" src="${asset('avatar/rafael-football.png')}" style="object-fit:contain" alt="" draggable="false">`;
+const shadow = (cx: number, cy: number, w: number) => { const s = el('abs'); Object.assign(s.style, { left: cx - w / 2 + 'px', top: cy - w * 0.09 + 'px', width: w + 'px', height: w * 0.18 + 'px', borderRadius: '50%', background: 'rgba(40,30,20,.22)', filter: 'blur(3px)', zIndex: '1' }); return s; };
 
-/* 1 — Wake up. L1: curtains → stretch (clock is a decoy). L2: curtains → clock → stretch, in the order shown. L3: Simon sequence of 4. */
+/* 1 — Wake up (bg-bedroom-morning). L1: curtains → stretch (clock is a decoy). L2: curtains → clock → pillow → stretch, in the order shown. L3: Simon sequence of 6 on 4 pads. */
 export const wake: Game = (ctx) => {
   const { root, W, H } = ctx;
   if (ctx.level === 3) return simon();
   ctx.budget(ctx.level === 1 ? 4 : 3);
-  const ww = Math.min(W * 0.84, 340), wh = ww * 0.62;
-  const win = put(el('abs'), W / 2, H * 0.22, ww, wh);
-  Object.assign(win.style, { borderRadius: '28px', overflow: 'hidden', border: '10px solid #fff', background: 'linear-gradient(#bfe3f7,#eaf8ff)', boxShadow: 'var(--shadow)' });
+  // the window sits where the background's own window is
+  const tl = ctx.bgPt(0.33, 0.2), br = ctx.bgPt(0.72, 0.5);
+  const ww = Math.max(150, br.x - tl.x), wh = Math.max(110, br.y - tl.y);
+  const win = el('abs'); put(win, (tl.x + br.x) / 2, (tl.y + br.y) / 2 + 6, ww, wh);
+  Object.assign(win.style, { borderRadius: '18px', overflow: 'hidden', border: '7px solid #fff', background: 'linear-gradient(#bfe3f7,#eaf8ff)', boxShadow: 'var(--shadow)', zIndex: '3' });
   const sun = el('abs', P.sun()); Object.assign(sun.style, { width: '40%', height: '70%', left: '30%', bottom: '-70%', transition: 'bottom 3s ease-out' });
-  const cl = (side: 'left' | 'right') => { const c = el('abs bar'); Object.assign(c.style, { top: '0', bottom: '0', width: '51%', [side]: '0', background: 'repeating-linear-gradient(90deg,#ffb3c1 0 16px,#ffc9d4 16px 32px)' }); return c; };
+  const cl = (side: 'left' | 'right') => {
+    const c = el('abs bar', spr('bedroom', `curtain-${side}`, 'stretch'));
+    Object.assign(c.style, { top: '0', bottom: '0', width: '52%', [side]: '0', transformOrigin: side === 'left' ? '0 50%' : '100% 50%' }); return c;
+  };
   const cL = cl('left'), cR = cl('right'); win.append(sun, cL, cR); win.dataset.t = '1'; win.dataset.testid = 'w-curtains';
-  const clock = put(el('abs', P.clock()), W * 0.22, H * 0.52, ctx.size(100)); clock.dataset.t = '1'; clock.dataset.testid = 'w-clock';
+  const clockC = { x: W * 0.2, y: H * 0.56 };
+  const clock = put(el('abs', P.clock()), clockC.x, clockC.y, ctx.size(100)); clock.dataset.t = '1'; clock.dataset.testid = 'w-clock'; clock.style.zIndex = '3';
+  const pillowC = ctx.bgPt(0.2, 0.585);
+  const pillow = put(el('abs', P.pillow()), pillowC.x, pillowC.y, Math.min(W * 0.3, 130), Math.min(W * 0.22, 96)); pillow.dataset.t = '1'; pillow.dataset.testid = 'w-pillow'; pillow.style.zIndex = '3'; pillow.style.transform = 'rotate(-14deg) translateX(6px)';
   const av = el('abs'); av.append(avatarImg('rafael-football', Math.min(H * 0.3, 230)));
-  Object.assign(av.style, { left: '58%', bottom: '66px', transform: 'translateX(-50%)', transformOrigin: '50% 100%', transition: 'transform .5s cubic-bezier(.3,1.6,.5,1)' }); av.dataset.t = '1'; av.dataset.testid = 'w-av';
-  root.append(win, clock, av);
-  const steps = ctx.level === 1 ? ['curtains', 'stretch'] : ['curtains', 'clock', 'stretch'];
+  Object.assign(av.style, { left: '60%', bottom: '66px', transform: 'translateX(-50%)', transformOrigin: '50% 100%', transition: 'transform .5s cubic-bezier(.3,1.6,.5,1)', zIndex: '3' }); av.dataset.t = '1'; av.dataset.testid = 'w-av';
+  root.append(shadow(clockC.x, clockC.y + 48, 80), win, clock, av);
+  const steps = ctx.level === 1 ? ['curtains', 'stretch'] : ['curtains', 'clock', 'pillow', 'stretch'];
+  if (ctx.level === 2) root.append(pillow);
   // order strip (pictures, no words)
-  const strip = el('abs'); Object.assign(strip.style, { left: '50%', bottom: '2px', transform: 'translateX(-50%)', display: 'flex', gap: '10px', background: 'rgba(255,255,255,.85)', borderRadius: '20px', padding: '6px 12px', zIndex: '4', alignItems: 'center' });
-  const strip1 = steps.map((s, i) => { const c = icon(s === 'curtains' ? curtainsIcon : s === 'clock' ? P.clock() : `<img src="${asset('avatar/rafael-football.png')}" style="height:100%;object-fit:contain">`, 46); c.style.opacity = '.5'; if (i) strip.append(h('span', { style: 'color:#7fb9de;font-weight:700' }, '›')); strip.append(c); return c; });
+  const strip = el('abs'); Object.assign(strip.style, { left: '50%', bottom: '2px', transform: 'translateX(-50%)', display: 'flex', gap: '10px', background: 'rgba(255,255,255,.88)', borderRadius: '20px', padding: '6px 12px', zIndex: '4', alignItems: 'center' });
+  const pic = (s: string) => (s === 'curtains' ? P.curtains() : s === 'clock' ? P.clock() : s === 'pillow' ? P.pillow() : avatarIcon);
+  const strip1 = steps.map((s, i) => { const c = icon(pic(s), 46); c.style.opacity = '.5'; if (i) strip.append(h('span', { style: 'color:#7fb9de;font-weight:700' }, '›')); strip.append(c); return c; });
   root.append(strip);
   let step = 0;
-  const target = () => (steps[step] === 'curtains' ? win : steps[step] === 'clock' ? clock : av);
+  const target = () => (steps[step] === 'curtains' ? win : steps[step] === 'clock' ? clock : steps[step] === 'pillow' ? pillow : av);
   const refreshHint = () => { strip1.forEach((c, i) => (c.style.opacity = i < step ? '.25' : i === step ? '1' : '.5')); ctx.hand(() => (step < steps.length ? { kind: 'tap', at: rel(ctx, target()) } : null)); };
   ctx.say(ctx.level === 1 ? 'g.1.curtains' : 'g.1.order');
   const advance = () => {
     step++; ctx.hit();
     if (step >= steps.length) { sfx.sparkle(); ctx.praise(); ctx.win(); return; }
-    ctx.say(steps[step] === 'clock' ? 'g.1.clock' : 'g.1.stretch'); refreshHint();
+    ctx.say(steps[step] === 'clock' ? 'g.1.clock' : steps[step] === 'pillow' ? 'g.1.pillow' : 'g.1.stretch'); refreshHint();
   };
   const press = (which: string, e: HTMLElement) => e.addEventListener('pointerdown', () => {
     if (step >= steps.length) return;
-    if (steps[step] !== which) { e.animate([{ transform: 'translateX(-8px)' }, { transform: 'translateX(8px)' }, { transform: 'none' }], 300); ctx.mistake(); return; }
-    if (which === 'curtains') { cL.style.transform = 'translateX(-92%)'; cR.style.transform = 'translateX(92%)'; sfx.whoosh(); sun.style.bottom = '8%'; ctx.later(() => sfx.chime(1), 900); }
-    else if (which === 'clock') { clock.animate([{ transform: 'rotate(-12deg)' }, { transform: 'rotate(12deg)' }, { transform: 'none' }], 400); sfx.soft(); }
-    else { av.style.transform = 'translateX(-50%) scaleY(1.14) rotate(3deg)'; sfx.boing(); ctx.later(() => (av.style.transform = 'translateX(-50%)'), 450); const c = centerOf(av); ctx.sparkle(c.x, c.y - 60); }
+    const base = e.style.transform;
+    if (steps[step] !== which) { e.animate([{ transform: base + ' translateX(-8px)' }, { transform: base + ' translateX(8px)' }, { transform: base || 'none' }], 300); ctx.mistake(); return; }
+    const c = centerOf(e), rb = root.getBoundingClientRect();
+    if (which === 'curtains') { cL.style.transform = 'translateX(-86%) scaleX(.55)'; cR.style.transform = 'translateX(86%) scaleX(.55)'; sfx.whoosh(); sun.style.bottom = '8%'; ctx.later(() => sfx.chime(1), 900); ctx.burst(c.x - rb.left, c.y - rb.top, 10); }
+    else if (which === 'clock') { clock.animate([{ transform: 'rotate(-12deg) scale(1.1)' }, { transform: 'rotate(12deg) scale(1.1)' }, { transform: 'none' }], 400); sfx.good(0); ctx.burst(c.x - rb.left, c.y - rb.top, 8); }
+    else if (which === 'pillow') { pillow.style.transition = 'transform .5s cubic-bezier(.3,1.6,.5,1)'; pillow.style.transform = 'rotate(0deg) scale(1.08, .9)'; ctx.later(() => (pillow.style.transform = 'rotate(0deg)'), 400); sfx.good(2); ctx.burst(c.x - rb.left, c.y - rb.top, 8); }
+    else { av.style.transform = 'translateX(-50%) scaleY(1.14) rotate(3deg)'; sfx.boing(); ctx.later(() => (av.style.transform = 'translateX(-50%)'), 450); ctx.sparkle(c.x, c.y - 60); ctx.burst(c.x - rb.left, c.y - rb.top - 60, 12); }
     advance();
   });
-  press('curtains', win); press('clock', clock); press('stretch', av);
+  press('curtains', win); press('clock', clock); press('pillow', pillow); press('stretch', av);
   refreshHint();
 
   function simon() {
     ctx.budget(2);
     const pads = [
-      { c: '#ffb3c1', html: curtainsIcon }, { c: '#ffe28a', html: P.clock() }, { c: '#a8e6cf', html: P.sun() },
-      { c: '#bfe3f7', html: `<img src="${asset('avatar/rafael-football.png')}" style="height:100%;object-fit:contain">` },
+      { c: '#ffb3c1', html: P.curtains() }, { c: '#ffe28a', html: P.clock() }, { c: '#a8e6cf', html: P.pillow() },
+      { c: '#bfe3f7', html: avatarIcon },
     ].map((p, i) => {
-      const e = el('abs'); const sz = Math.min(W * 0.4, 160);
+      const e = el('abs'); const sz = Math.min(W * 0.4, 150);
       put(e, W / 2 + (i % 2 ? 1 : -1) * (sz * 0.58), H * 0.3 + Math.floor(i / 2) * (sz * 1.15), sz, sz);
-      Object.assign(e.style, { background: p.c, borderRadius: '34px', boxShadow: 'var(--shadow)', padding: '12px', transition: 'transform .25s, filter .25s' });
+      Object.assign(e.style, { background: p.c, borderRadius: '34px', boxShadow: 'var(--shadow)', padding: '12px', transition: 'transform .25s, filter .25s', zIndex: '3' });
       e.innerHTML = p.html; e.dataset.t = '1'; e.dataset.testid = 'pad-' + i; root.append(e); return e;
     });
-    const seq = Array.from({ length: 4 }, () => Math.floor(Math.random() * 4));
+    const seq = Array.from({ length: 6 }, () => Math.floor(Math.random() * 4));
     for (let i = 1; i < seq.length; i++) if (seq[i] === seq[i - 1]) seq[i] = (seq[i] + 1) % 4;
     root.dataset.simon = seq.join('');
     let pos = 0, accepting = false;
     const flash = (i: number) => { pads[i].style.transform = 'scale(1.12)'; pads[i].style.filter = 'brightness(1.15) drop-shadow(0 0 14px #fff6a8)'; sfx.chime(i); ctx.later(() => { pads[i].style.transform = ''; pads[i].style.filter = ''; }, 450); };
     const demo = () => {
       accepting = false; pos = 0; ctx.hand(null); ctx.say('g.1.simon');
-      seq.forEach((n, k) => ctx.later(() => flash(n), 2600 + k * 800));
-      ctx.later(() => { accepting = true; ctx.say('g.1.simon.go'); ctx.hand(() => ({ kind: 'tap', at: rel(ctx, pads[seq[pos]]) })); }, 2600 + seq.length * 800 + 300);
+      seq.forEach((n, k) => ctx.later(() => flash(n), 2600 + k * 700));
+      ctx.later(() => { accepting = true; ctx.say('g.1.simon.go'); }, 2600 + seq.length * 700 + 300);
     };
     pads.forEach((p, i) => p.addEventListener('pointerdown', () => {
       if (!accepting) return;
-      flash(i);
+      flash(i); const c = centerOf(p), rb = root.getBoundingClientRect();
       if (seq[pos] !== i) { accepting = false; if (!ctx.mistake(false)) { ctx.say('retry.1'); ctx.later(demo, 1800); } return; }
-      pos++; ctx.hit();
+      pos++; ctx.hit(); ctx.squash(p); ctx.burst(c.x - rb.left, c.y - rb.top, 6);
       if (pos >= seq.length) { accepting = false; ctx.praise(); ctx.win(); }
     }));
     demo();
   }
 };
 
-/* 2 — Brush teeth. L1: germs stay put. L2: germs hide behind teeth. L3: clean the 4 zones in the order shown, with a generous timer. */
+/* 2 — Brush teeth (bg-bathroom-sink). L1: germs stay put. L2: germs hide behind teeth. L3: clean the 4 zones in the order shown, with a generous timer. */
 export const teeth: Game = (ctx) => {
   const { root, W, H } = ctx;
   ctx.budget(ctx.level === 1 ? 6 : ctx.level === 2 ? 5 : 3);
-  const mw = Math.min(W * 0.92, 400), mh = mw * 0.74, mcx = W / 2, mcy = H * 0.42;
-  const mouth = put(el('abs'), mcx, mcy, mw, mh);
-  const tx = [20, 40, 60, 80];
-  mouth.innerHTML = `<svg viewBox="0 0 100 74" class="prop"><path d="M6 36 C6 8 94 8 94 36 C94 66 6 66 6 36Z" fill="#ff8fa3"/><path d="M12 36 C12 14 88 14 88 36 C88 60 12 60 12 36Z" fill="#c9566e"/><g class="teethrow">${tx.map((x) => `<rect x="${x - 8}" y="19" width="16" height="15" rx="5" fill="#fff"/><rect x="${x - 8}" y="39" width="16" height="15" rx="5" fill="#fff"/>`).join('')}</g></svg>`;
+  const mw = Math.min(W * 0.92, 400), mh = mw * (322 / 363), mcx = W / 2, mcy = H * 0.4;
+  const mouth = put(el('abs', P.tooth()), mcx, mcy, mw, mh); mouth.dataset.testid = 'mouth'; mouth.style.zIndex = '2';
   root.append(mouth);
-  const gs = ctx.size(70);
-  const pos = (x: number, y: number): Pt => ({ x: (x / 100) * mw + (W - mw) / 2, y: (y / 74) * mh + (mcy - mh / 2) });
-  const slots: { x: number; y: number; q: number }[] = [];
-  tx.forEach((x, i) => { slots.push({ x, y: 26, q: i < 2 ? 0 : 1 }); slots.push({ x, y: 47, q: i < 2 ? 2 : 3 }); });
+  root.append(put(el('abs', P.toothpaste()), W * 0.16, H * 0.82, Math.min(W * 0.26, 100), Math.min(W * 0.26, 100) * 0.85));
+  const gs = ctx.size(64);
+  const pos = (fx: number, fy: number): Pt => ({ x: (W - mw) / 2 + fx * mw, y: mcy - mh / 2 + fy * mh });
+  // tooth slots as fractions of the mouth picture: 4 columns, upper and lower row
+  const cx = [0.25, 0.41, 0.59, 0.75];
+  const slots: { fx: number; fy: number; q: number }[] = [];
+  cx.forEach((x, i) => { slots.push({ fx: x, fy: 0.34, q: i < 2 ? 0 : 1 }); slots.push({ fx: x, fy: 0.68, q: i < 2 ? 2 : 3 }); });
   const chosen = ctx.level === 3 ? slots : shuffle(slots).slice(0, 6);
-  const cols = ['#9bd36b', '#7fd0c0', '#b4d96b', '#8fd68a', '#a5d86f', '#7fd0a8', '#9bd36b', '#7fd0c0'];
   const germs = chosen.map((s, i) => {
-    const g = el('abs', P.germ(cols[i])); g.dataset.testid = 'germ'; const p = pos(s.x, s.y); put(g, p.x, p.y, gs); g.dataset.q = String(s.q);
+    const g = el('abs', P.germ('g' + i)); g.dataset.testid = 'germ'; const p = pos(s.fx, s.fy); put(g, p.x, p.y, gs); g.dataset.q = String(s.q); g.style.zIndex = '3';
     if (ctx.level === 1) { g.classList.add('jiggle'); g.style.animationDelay = i * 0.2 + 's'; }
     root.append(g); return g;
   });
-  const brush = el('abs', P.brush()); put(brush, 0, 0, 100); Object.assign(brush.style, { opacity: '0', pointerEvents: 'none', zIndex: '4' }); root.append(brush);
+  const brush = el('abs', P.brush()); put(brush, 0, 0, 100); Object.assign(brush.style, { opacity: '0', pointerEvents: 'none', zIndex: '6' }); root.append(brush);
   let left = germs.length; let timer: { stop(): void } | null = null;
   // L2: germs duck behind the teeth for a moment
   if (ctx.level === 2) {
     ctx.say('g.2.hide');
     germs.forEach((g, i) => {
       let t = i * 0.7; let hid = false;
-      ctx.loop((dt) => { if (g.dataset.popped) return; t += dt; const cyc = t % 3.4; const hide = cyc > 2.1; if (hide !== hid) { hid = hide; g.style.transition = 'transform .35s, opacity .35s'; g.style.transform = hide ? 'scale(.2)' : ''; g.style.opacity = hide ? '0' : '1'; g.dataset.hidden = hide ? '1' : ''; } });
+      ctx.loop((dt) => { if (g.dataset.popped) return; t += dt; const cyc = t % 3.0; const hide = cyc > 1.8; if (hide !== hid) { hid = hide; g.style.transition = 'transform .35s, opacity .35s'; g.style.transform = hide ? 'scale(.2)' : ''; g.style.opacity = hide ? '0' : '1'; g.dataset.hidden = hide ? '1' : ''; } });
     });
   }
   // L3: zones in a shown order
-  let order = shuffle([0, 1, 2, 3]), zi = 0;
-  const zoneBox = [[8, 14, 50, 30], [50, 14, 92, 30], [8, 38, 50, 58], [50, 38, 92, 58]]; // % of mouth
-  const guide = el('abs'); Object.assign(guide.style, { border: '5px dashed #fff', borderRadius: '24px', zIndex: '3', pointerEvents: 'none', boxShadow: '0 0 0 4px rgba(255,255,255,.35)', display: 'none' }); root.append(guide);
+  const order = shuffle([0, 1, 2, 3]); let zi = 0;
+  const zoneBox = [[0.1, 0.18, 0.5, 0.5], [0.5, 0.18, 0.9, 0.5], [0.1, 0.52, 0.5, 0.84], [0.5, 0.52, 0.9, 0.84]]; // fractions of the mouth
+  const guide = el('abs'); Object.assign(guide.style, { border: '5px dashed #fff', borderRadius: '24px', zIndex: '4', pointerEvents: 'none', boxShadow: '0 0 0 4px rgba(255,255,255,.35)', display: 'none' }); root.append(guide);
   const setZone = () => {
     const q = order[zi]; const [a, b, c, d] = zoneBox[q];
-    const p0 = pos(a, (b / 100) * 74), p1 = pos(c, (d / 100) * 74);
-    Object.assign(guide.style, { display: 'block', left: p0.x + 'px', top: pos(0, b * 0.74).y + 'px', width: p1.x - p0.x + 'px', height: pos(0, d * 0.74).y - pos(0, b * 0.74).y + 'px' });
-    ctx.hand(() => { const c0 = { x: (p0.x + p1.x) / 2, y: pos(0, ((b + d) / 2) * 0.74).y }; return { kind: 'drag', from: { x: c0.x - 40, y: c0.y }, to: { x: c0.x + 40, y: c0.y } }; });
+    const p0 = pos(a, b), p1 = pos(c, d);
+    Object.assign(guide.style, { display: 'block', left: p0.x + 'px', top: p0.y + 'px', width: p1.x - p0.x + 'px', height: p1.y - p0.y + 'px' });
+    ctx.hand(() => { const c0 = { x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2 }; return { kind: 'drag', from: { x: c0.x - 40, y: c0.y }, to: { x: c0.x + 40, y: c0.y } }; });
   };
   const live = () => germs.filter((g) => !g.dataset.popped && !g.dataset.hidden && (ctx.level !== 3 || +g.dataset.q! === order[zi]));
-  if (ctx.level === 3) { ctx.say('g.2.zone'); setZone(); timer = timerBar(ctx, 75, () => ctx.lose()); }
+  if (ctx.level === 3) { ctx.say('g.2.zone'); setZone(); timer = timerBar(ctx, 60, () => ctx.lose()); }
   else { ctx.say('g.2.how'); ctx.hand(() => { const g = germs.find((x) => !x.dataset.popped); if (!g) return null; const c = rel(ctx, g); return { kind: 'drag', from: { x: c.x - 60, y: c.y }, to: { x: c.x + 40, y: c.y } }; }); }
   swipePop(ctx, root, live, 22, (g) => {
-    g.classList.remove('jiggle'); g.classList.add('pop'); sfx.pop(); ctx.hit(); left--;
-    const c = centerOf(g); ctx.sparkle(c.x, c.y); setTimeout(() => g.remove(), 400);
+    g.classList.remove('jiggle'); g.classList.add('pop'); sfx.good(left % 4); ctx.hit(); left--;
+    const c = centerOf(g); ctx.sparkle(c.x, c.y); const rb = root.getBoundingClientRect(); ctx.burst(c.x - rb.left, c.y - rb.top, 7); setTimeout(() => g.remove(), 400);
     if (ctx.level === 3 && !germs.some((x) => !x.dataset.popped && +x.dataset.q! === order[zi])) { zi++; sfx.chime(zi); if (zi < 4) setZone(); else guide.style.display = 'none'; }
     if (left === 0) {
-      timer?.stop(); mouth.querySelector('.teethrow')!.setAttribute('filter', 'drop-shadow(0 0 3px #fff7a8)');
+      timer?.stop(); mouth.style.filter = 'drop-shadow(0 0 10px #fff7a8) brightness(1.06)';
       sfx.sparkle(); ctx.say('g.2.done'); ctx.later(() => { brush.remove(); ctx.praise(); ctx.win(); }, 1800);
     }
   }, (n) => { if (n === 0 && left > 0) ctx.mistake(false); }, brush);
 };
 
-/* 3 — Get dressed, in the right order. L1: one piece at a time. L2: all pieces, correct order. L3: plus rain-coat and pajamas to leave out. */
+/* 3 — Get dressed in the Argentina outfit, in the right order (bg-bedroom-morning). L1: one piece at a time. L2: all pieces, correct order. L3: plus raincoat and pajamas to leave out. */
 export const dress: Game = (ctx) => {
   const { root, W, H } = ctx;
   ctx.budget(ctx.level === 1 ? 5 : ctx.level === 2 ? 3 : 2);
   const sh = Math.min(H * 0.56, 400), sw = sh * (379 / 743);
   const cx = W / 2, cy = H * 0.34;
-  const sil = el('abs'); put(sil, cx, cy, sw, sh);
+  const sil = el('abs silpanel'); put(sil, cx, cy, sw + 28, sh + 14); sil.style.zIndex = '2'; sil.style.padding = '7px 14px';
   const img = h('img', { src: asset('avatar/rafael-dressed.png'), style: 'width:100%;height:100%;object-fit:contain', class: 'sil', draggable: 'false' });
   sil.append(img); root.append(sil);
   const zone = (fx: number, fy: number, fw: number, fh: number) => { const z = el('abs zone'); put(z, cx - sw / 2 + fx * sw, cy - sh / 2 + fy * sh, fw * sw, fh * sh); root.append(z); return z; };
   const zTorso = zone(0.5, 0.36, 0.95, 0.3), zLegs = zone(0.5, 0.66, 0.7, 0.2), zFeet = zone(0.5, 0.93, 0.9, 0.16);
   const order: { id: string; html: string; zone: HTMLElement; size: number }[] = [
-    { id: 'vest', html: P.vest(), zone: zTorso, size: 100 }, { id: 'shirt', html: P.shirt(), zone: zTorso, size: 120 },
+    { id: 'shirt', html: P.shirt(), zone: zTorso, size: 120 },
     { id: 'shorts', html: P.shorts(), zone: zLegs, size: 100 }, { id: 'socks', html: P.sock(), zone: zFeet, size: 80 }, { id: 'shoes', html: P.shoe(), zone: zFeet, size: 84 },
   ];
   const decoys = [{ id: 'rain', html: P.raincoat(), zone: zTorso, size: 100 }, { id: 'pj', html: P.pajamas(), zone: zTorso, size: 100 }];
@@ -164,7 +179,7 @@ export const dress: Game = (ctx) => {
       if (!anyZone) return null; // dropped in empty space: just floats back, no penalty
       if (!zhit || decoy || order[next].id !== o.id) { ctx.mistake(); if (decoy) ctx.say('g.3.sunny'); return null; }
       next++; const z = rel(ctx, o.zone);
-      const off = o.id === 'shirt' ? 0 : o.id === 'vest' ? 0 : o.id === 'socks' ? -8 : 0;
+      const off = o.id === 'socks' ? -8 : 0;
       if (next >= order.length) ctx.later(finish, 500); else if (ctx.level > 1) refresh();
       return { x: z.x + off, y: z.y + (o.id === 'shoes' ? 10 : 0) };
     },
@@ -181,7 +196,7 @@ export const dress: Game = (ctx) => {
       ctx.hand(() => ({ kind: 'drag', from: { x: W / 2, y: H * 0.84 }, to: rel(ctx, o.zone) }));
     };
     showOne();
-    return void refreshNoop();
+    return;
   }
   ctx.say('g.3.order');
   const pool = ctx.level === 2 ? order.map((o) => ({ o, d: false })) : shuffle([...order.map((o) => ({ o, d: false })), ...decoys.map((o) => ({ o, d: true }))]);
@@ -193,27 +208,28 @@ export const dress: Game = (ctx) => {
   });
   dragItems(ctx, items); items.forEach((i) => placedEls.push(i.el!));
   function refresh() { const o = order[next]; const it = items.find((x) => x.id === o.id)!; ctx.hand(() => ({ kind: 'drag', from: it.home, to: rel(ctx, o.zone) })); }
-  function refreshNoop() { /* level 1 handles its own hint */ }
   refresh();
 };
 
-/* 4 — Breakfast order. L1: picture card, 3 foods. L2: includes "how many". L3: card disappears — remember 5 items. */
+/* 4 — Breakfast order (bg-kitchen). L1: picture card, 3 foods. L2: includes "how many". L3: card disappears — remember 6 items. */
 export const breakfast: Game = (ctx) => {
   const { root, W, H } = ctx;
   ctx.budget(ctx.level === 1 ? 4 : ctx.level === 2 ? 3 : 2);
-  const FOODS: Record<string, string> = { cereal: P.cereal(), milk: P.milk(), toast: P.toast(), banana: P.banana(), egg: P.egg(), juice: P.juice() };
-  const need: string[] = ctx.level === 1 ? ['cereal', 'milk', 'toast'] : ctx.level === 2 ? ['toast', 'toast', 'banana', 'juice'] : shuffle(['cereal', 'milk', 'banana', 'toast', 'egg']);
-  const trayIds = ctx.level === 1 ? shuffle(['cereal', 'milk', 'toast', 'banana', 'egg']) : ctx.level === 2 ? shuffle(['toast', 'toast', 'toast', 'banana', 'juice', 'egg']) : shuffle(['cereal', 'milk', 'banana', 'toast', 'toast', 'egg', 'juice']);
-  const av = el('abs'); av.append(avatarImg('rafael-football', Math.min(H * 0.2, 150))); Object.assign(av.style, { left: '50%', top: H * 0.24 + 'px', transform: 'translateX(-50%)' }); root.append(av);
+  const FOODS: Record<string, string> = { cereal: P.cereal(), milk: P.milk(), toast: P.toast(), banana: P.banana(), apple: P.apple(), water: P.juice(), broccoli: P.broccoli(), chicken: P.chicken() };
+  const need: string[] = ctx.level === 1 ? ['cereal', 'milk', 'toast'] : ctx.level === 2 ? ['toast', 'toast', 'banana', 'water'] : shuffle(['cereal', 'milk', 'banana', 'toast', 'apple', 'water']);
+  const trayIds = ctx.level === 1 ? shuffle(['cereal', 'milk', 'toast', 'banana', 'apple']) : ctx.level === 2 ? shuffle(['toast', 'toast', 'toast', 'banana', 'water', 'apple']) : shuffle(['cereal', 'milk', 'banana', 'toast', 'apple', 'water', 'broccoli', 'chicken']);
+  const av = el('abs'); av.append(avatarImg('rafael-football', Math.min(H * 0.2, 150))); Object.assign(av.style, { left: '50%', top: H * 0.24 + 'px', transform: 'translateX(-50%)', zIndex: '3' }); root.append(av);
   // order card
   const card = el('abs'); Object.assign(card.style, { left: '50%', top: '4px', transform: 'translateX(-50%)', display: 'flex', gap: '6px', background: '#fff', borderRadius: '22px', padding: '8px 12px', boxShadow: 'var(--shadow)', zIndex: '4' });
   card.dataset.need = need.join(',');
-  need.forEach((f) => card.append(icon(FOODS[f], 52)));
+  const cs = need.length > 5 ? 40 : 52;
+  need.forEach((f) => card.append(icon(FOODS[f], cs)));
   root.append(card);
-  if (ctx.level === 3) { ctx.say('g.4.memory'); ctx.later(() => { card.innerHTML = ''; need.forEach(() => { const q = el('', ''); Object.assign(q.style, { width: '52px', height: '52px', borderRadius: '50%', background: '#e3eef6', display: 'grid', placeItems: 'center', color: '#7fb9de', fontWeight: '700', fontSize: '28px' }); q.textContent = '?'; card.append(q); }); ctx.hand(firstHint); }, 4500); }
+  const firstHint = () => { const f = remaining[0]; const it = items.find((x) => x.id === f && !x.placed); return it ? { kind: 'drag' as const, from: it.home, to: rel(ctx, mat) } : null; };
+  if (ctx.level === 3) { ctx.say('g.4.memory'); ctx.later(() => { card.innerHTML = ''; need.forEach(() => { const q = el('', ''); Object.assign(q.style, { width: cs + 'px', height: cs + 'px', borderRadius: '50%', background: '#e3eef6', display: 'grid', placeItems: 'center', color: '#7fb9de', fontWeight: '700', fontSize: '28px' }); q.textContent = '?'; card.append(q); }); ctx.hand(firstHint); }, 4000); }
   else ctx.say('g.4.how');
-  const mat = el('abs zone glow'); put(mat, W / 2, H * 0.46, Math.min(W * 0.9, 360), H * 0.17); root.append(mat);
-  mat.innerHTML = P.plate(); (mat.firstChild as SVGElement).style.cssText = 'position:absolute;inset:0;opacity:.55;width:100%;height:100%';
+  const mat = el('abs zone glow'); put(mat, W / 2, H * 0.46, Math.min(W * 0.9, 360), H * 0.17); mat.style.zIndex = '2'; root.append(mat);
+  mat.innerHTML = P.plate(); (mat.firstChild as HTMLElement).style.cssText = 'position:absolute;inset:0;opacity:.85;width:100%;height:100%';
   const remaining = [...need]; let placed = 0;
   const per = Math.ceil(trayIds.length / 2);
   const items: DragItem[] = trayIds.map((f, i) => {
@@ -226,22 +242,20 @@ export const breakfast: Game = (ctx) => {
         if (k < 0) { ctx.mistake(); return null; }
         remaining.splice(k, 1); const m = rel(ctx, mat); const slot = placed++;
         const tot = need.length; if (!remaining.length) ctx.later(eat, 600); else ctx.hand(firstHint);
-        return { x: m.x - ((tot - 1) * 34) + slot * 68, y: m.y };
+        const step = Math.min(68, (mat.offsetWidth - 60) / Math.max(1, tot - 1));
+        return { x: m.x - ((tot - 1) * step) / 2 + slot * step, y: m.y };
       },
     };
   });
   dragItems(ctx, items);
-  function firstHint() { const f = remaining[0]; const it = items.find((x) => x.id === f && !x.placed); return it ? { kind: 'drag' as const, from: it.home, to: rel(ctx, mat) } : null; }
   ctx.hand(ctx.level === 3 ? null : firstHint);
-  const spoon = `<svg viewBox="0 0 100 100" class="prop"><ellipse cx="70" cy="30" rx="20" ry="14" fill="#dfe6ec" transform="rotate(-30 70 30)"/><path d="M60 40 L16 88" stroke="#c9d3db" stroke-width="9" stroke-linecap="round"/></svg>`;
   function eat() {
-    const sp = put(el('abs', spoon), rel(ctx, mat).x, rel(ctx, mat).y, 100); sp.style.transition = 'all 1s ease-in-out'; sp.style.zIndex = '9'; root.append(sp);
+    const sp = put(el('abs', P.spoon()), rel(ctx, mat).x, rel(ctx, mat).y, 100); sp.style.transition = 'all 1s ease-in-out'; sp.style.zIndex = '9'; root.append(sp);
     [0, 1].forEach((i) => {
       ctx.later(() => { const c = rel(ctx, av); sp.style.left = c.x - 50 + 'px'; sp.style.top = c.y + 'px'; sfx.whoosh(); }, 300 + i * 2200);
-      ctx.later(() => sfx.squish(0.3), 300 + i * 2200 + 1000);
+      ctx.later(() => { sfx.squish(0.3); ctx.squash(av, 0.1); }, 300 + i * 2200 + 1000);
       ctx.later(() => { sp.style.left = W / 2 - 50 + 'px'; sp.style.top = rel(ctx, mat).y - 50 + 'px'; }, 300 + i * 2200 + 1200);
     });
     ctx.later(() => ctx.say('g.4.done'), 4800); ctx.later(() => { ctx.praise(); ctx.win(); }, 6200);
   }
-  void frag;
 };

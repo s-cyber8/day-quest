@@ -2,7 +2,7 @@ import './style.css';
 import { registerSW } from 'virtual:pwa-register';
 import { h, frag, sleep } from './core/dom';
 import { P } from './art/props';
-import { mokaSvg } from './art/moka';
+import { moka3d, preloadMoka } from './art/moka';
 import { Station, asset } from './content/stations';
 import { settings, day, saveDay, rollDay, logStation, requestPersist, getProg, saveProg, logCalm } from './core/storage';
 import { unlockAudio, sfx, applyVolume } from './core/audio';
@@ -14,6 +14,8 @@ import { setWake } from './core/wake';
 import { initCaption, stationCard, holdButton, confetti, askGate, hideCaption } from './screens/ui';
 import { renderMap, nextAfter, visibleStations } from './screens/map';
 import { renderNight } from './screens/night';
+import { renderHome, World } from './screens/home';
+import { showPicker, StoryEnv } from './screens/stories';
 import { renderSticker } from './screens/sticker';
 import { renderParent } from './screens/parent';
 import { offerCalm, openCalm } from './screens/calm';
@@ -39,6 +41,7 @@ function setScreen(el: HTMLElement, back: (() => void) | null = null) {
   app.replaceChildren(el);
   const kind = el.dataset.screen || '';
   document.body.dataset.view = kind;
+  if (kind === 'map') document.body.dataset.world = 'day'; else if (kind === 'storypick' || kind === 'story') document.body.dataset.world = 'stories';
   cloudBtn().hidden = kind === 'night' || kind === 'parent';
   setBase(back);
   setWake(VIEWS_WITH_WAKE.has(kind));
@@ -56,9 +59,15 @@ function applyRM() { document.body.classList.toggle('rm', settings.reducedMotion
 // ---------------- map / day ----------------
 function showMap(from?: Station) {
   setFrustrationEnabled(true);
-  setScreen(renderMap({ onStation: runStation, onParent: openParent, onBook: openBook }, from), null);
+  setScreen(renderMap({ onStation: runStation, onParent: openParent, onBook: openBook }, from), () => { stopSpeaking(); showHome(); });
 }
-function openBook() { setScreen(renderSticker(() => showMap()), () => showMap()); }
+// ---------------- home: two worlds ----------------
+const storyEnv: StoryEnv = { setScreen: (el, back) => setScreen(el, back), goHome: () => showHome() };
+function showHome() {
+  setFrustrationEnabled(false);
+  setScreen(renderHome({ open: (w: World) => (w === 'day' ? showMap() : showPicker(storyEnv)), onParent: openParent, onBook: openBook }), null);
+}
+function openBook() { const back = () => (document.body.dataset.world === 'stories' ? showHome() : showMap()); setScreen(renderSticker(back), back); }
 async function openParent() {
   if (!(await askGate())) return;
   stopSpeaking(); setFrustrationEnabled(false);
@@ -110,7 +119,7 @@ async function runStation(s: Station) {
     // b. go do it
     await new Promise<void>((res) => {
       const screen = h('div', { class: 'screen godo', 'data-screen': 'godo', 'data-station': String(s.id) },
-        stationCard(s, true), h('div', { class: 'mokabig' }, mokaSvg('idle')),
+        stationCard(s, true), h('div', { class: 'mokabig' }, moka3d('idle')),
         h('div', { class: 'hint' }, 'עושים את זה באמת. כשמסיימים, ההורה לוחץ על הכפה.'), holdButton(res));
       setScreen(screen, cancelFlow);
       speak(s.go);
@@ -139,7 +148,7 @@ function celebrate(o: { title: string; ms: number; speakIds: string[]; stars?: n
     const c = h('div', { class: 'celebrate', 'data-testid': 'celebrate', 'data-screen': 'celebrate' });
     const hero = h('img', { class: 'hero2', src: asset('avatar/rafael-football.png'), alt: '', draggable: 'false' });
     const row = o.stars != null ? h('div', { class: 'starrow', 'data-testid': 'starrow', 'data-stars': String(o.stars) }, ...[1, 2, 3].map((i) => { const st = frag(P.star(i <= o.stars! ? '#ffd966' : '#dfe6ec')); st.classList.add('bigstar'); if (i > o.stars!) st.classList.add('dim'); return st; })) : null;
-    c.append(row ?? '', hero, h('div', { class: 'title' }, o.levelUp ? text('lvl.up') : o.title), h('div', { class: 'buddy2' }, mokaSvg('happy')));
+    c.append(row ?? '', hero, h('div', { class: 'title' }, o.levelUp ? text('lvl.up') : o.title), h('div', { class: 'buddy2' }, moka3d('happy')));
     confetti(c, 28);
     document.body.append(c); document.body.dataset.view = 'celebrate';
     sfx.big();
@@ -212,7 +221,7 @@ function retryOverlay(my: Flow, offerBreak: boolean): Promise<'retry' | 'back' |
     }
     const id = `retry.${1 + Math.floor(Math.random() * 3)}`;
     const o = h('div', { class: 'retry', 'data-testid': 'retry', 'data-screen': 'retry' },
-      h('div', { class: 'say' }, text(id)), h('div', { class: 'mokaw' }, mokaSvg('concerned')),
+      h('div', { class: 'say' }, text(id)), h('div', { class: 'mokaw' }, moka3d('concerned')),
       h('div', { class: 'choices' },
         h('button', { 'data-testid': 'retry-again', onclick: () => fin('retry') }, frag(P.retry()), h('span', {}, 'עוד פעם')),
         h('button', { 'data-testid': 'retry-back', onclick: () => fin('back') }, frag(P.arrow()), h('span', {}, 'למפה'))));
@@ -243,7 +252,7 @@ async function boot() {
   }, { capture: true });
   // iOS: no pinch / double-tap zoom, no rubber-band scroll outside the scrollable areas
   ['gesturestart', 'gesturechange', 'gestureend', 'dblclick', 'contextmenu'].forEach((ev) => document.addEventListener(ev, (e) => e.preventDefault()));
-  document.addEventListener('touchmove', (e) => { if (!(e.target as Element).closest?.('.mapscroll, .parent, .sticker')) e.preventDefault(); }, { passive: false });
+  document.addEventListener('touchmove', (e) => { if (!(e.target as Element).closest?.('.mapscroll, .parent, .sticker, .storypick')) e.preventDefault(); }, { passive: false });
   matchMedia('(prefers-reduced-motion: reduce)').addEventListener?.('change', applyRM);
 
   // new day: progress resets at the configured time (nothing is ever locked)
@@ -251,7 +260,9 @@ async function boot() {
   setInterval(tickDay, 15000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) tickDay(); });
 
-  showMap();
+  preloadMoka();
+  const w = new URLSearchParams(location.search).get('w'); // deep link: ?w=day | ?w=stories (used by the tests)
+  if (w === 'day') showMap(); else if (w === 'stories') showPicker(storyEnv); else showHome();
   registerSW({ immediate: true });
   void logCalm; void PHRASES;
 }

@@ -3,7 +3,9 @@
 // speaker: 'narrator' = adult narrator voice; 'moka' = the dog, first person, feminine.
 // tts: optional pronunciation text (niqqud only where a word is likely to be misread). UI shows `text`.
 export type Speaker = 'narrator' | 'moka';
-export interface Phrase { text: string; group: string; speaker: Speaker; tts?: string }
+import { STORY_ROWS, STORIES } from './stories.ts';
+// `tag` is the ElevenLabs v3 emotion tag (e.g. 'warm, cheerful'): sent to the TTS only, never shown in the UI.
+export interface Phrase { text: string; group: string; speaker: Speaker; tts?: string; tag: string }
 
 const G = {
   station: 'תחנות – הכרזה', go: 'תחנות – "עכשיו עושים באמת"', label: 'שמות התחנות', game: 'הוראות למשחקונים',
@@ -80,6 +82,7 @@ const raw: Row[] = [
   // --- games (kid words: press, move, brush)
   ['g.1.curtains', G.game, 'תלחץ על הווילונות כדי לפתוח אותם'],
   ['g.1.clock', G.game, 'עכשיו תלחץ על השעון'],
+  ['g.1.pillow', G.game, 'עכשיו תסדר את הכרית'],
   ['g.1.stretch', G.game, 'עכשיו תלחץ על רפאל כדי שיתמתח!'],
   ['g.1.order', G.game, 'תעשה לפי הסדר שבתמונה'],
   ['g.1.simon', G.game, 'תסתכל טוב, ואחר כך תעשה אותו דבר'],
@@ -180,17 +183,19 @@ export const TTS_A: Record<string, string> = {
   'g.8.fall': 'נָפַלְתָּ על המזרן הרך. נקום ונמשיך!',
   'fail.break': 'רוֹצֶה הפסקה שקטה אִתִּי?',
   'calm.offer': 'נראה שקשה. רוֹצֶה לבוא אִתִּי לפינה השקטה שלי?',
-  'calm.pick': 'מה בא לְךָ לעשות?',
+  'calm.pick': 'מָה בָּא לְךָ לַעֲשׂוֹת?',
   'calm.medal': 'קִבַּלְתָּ מדליית רוגע!',
   'calm.welcome': 'הִנֵּה הַפִּנָּה הַשְּׁקֵטָה שֶׁלִּי',
   'st.10.label': 'מִשְׂחַק קֻפְסָה',
   'lvl.up': 'עָלִיתָ שָׁלָב! כָּל הַכָּבוֹד!',
   'g.3.done': 'רפאל, לָבוּשׁ וּמוּכָן!',
-  'g.4.done': 'נַאם נַאם! בְּתֵאָבוֹן!',
+  'g.4.done': 'נָאם נָאם! בְּתֵאָבוֹן!',
+  'calm.breath.in': 'שׁוֹאֲפִים אֲוִיר...',
 };
 export const TTS_B: Record<string, string> = {
   'g.1.curtains': 'תִּלְחַץ על הווילונות כדי לפתוח אותם',
   'g.1.clock': 'עכשיו תִּלְחַץ על השעון',
+  'g.1.pillow': 'עכשיו תְּסַדֵּר את הכרית',
   'g.1.stretch': 'עכשיו תִּלְחַץ על רפאל כדי שֶׁיִּתְמַתֵּחַ!',
   'g.1.order': 'תַּעֲשֶׂה לפי הסדר שבתמונה',
   'g.1.simon': 'תִּסְתַּכֵּל טוב, ואחר כך תַּעֲשֶׂה אותו דבר',
@@ -220,10 +225,28 @@ export const TTS_B: Record<string, string> = {
   'calm.breath.how': 'קַח נשימה גדולה וּתְנַפֵּחַ את הבלון',
 };
 
-export const PHRASES: Record<string, Phrase> = Object.fromEntries(
-  raw.map(([id, group, text, sp, tts]) => [id, { text, group, speaker: sp === 'm' ? 'moka' : 'narrator', tts: tts ?? TTS_A[id] ?? TTS_B[id] }]),
-);
-export const PHRASE_IDS = raw.map((r) => r[0]);
+/** Emotion tag per Day phrase, by group (the story lines carry their own tags from stories.he.md). */
+function dayTag(id: string, group: string, sp: Speaker): string {
+  if (/^(praise|lvl\.up|star|done\.cheer|map\.allDone)/.test(id) || /^g\.\d+\.(done|goal|top)$/.test(id)) return 'excited, proud';
+  if (/^(retry|fail\.break|g\.(6\.fell|7\.saved|8\.fall))/.test(id)) return 'gentle, encouraging';
+  if (group === G.calm) return sp === 'moka' ? 'soft, caring' : 'soft, slow, soothing';
+  if (group === G.night && id.startsWith('night')) return 'whispers, soothing';
+  if (/^(st\.\d+\.announce|morning|map\.hello|game\.end)/.test(id)) return 'warm, cheerful';
+  return sp === 'moka' ? 'playful, warm' : 'clear, friendly';
+}
+const dayRows = raw.map(([id, group, text, sp, tts]) => {
+  const speaker: Speaker = sp === 'm' ? 'moka' : 'narrator';
+  return [id, { text, group, speaker, tts: tts ?? TTS_A[id] ?? TTS_B[id], tag: dayTag(id, group, speaker) }] as [string, Phrase];
+});
+const titleOf = (sid: string) => STORIES.find((s) => s.id === sid)?.title ?? '';
+const storyEntries = STORY_ROWS.map((r) => {
+  const sid = r.id.slice(0, 3);
+  const group = /^s\d\d$/.test(sid) ? `סיפור ${Number(sid.slice(1))} – ${titleOf(sid)}` : 'סיפורים – משותף';
+  return [r.id, { text: r.text, group, speaker: r.sp, tts: r.tts, tag: r.tag }] as [string, Phrase];
+});
+export const PHRASES: Record<string, Phrase> = Object.fromEntries([...dayRows, ...storyEntries]);
+export const DAY_IDS = raw.map((r) => r[0]);
+export const PHRASE_IDS = [...DAY_IDS, ...STORY_ROWS.map((r) => r.id)];
 export const text = (id: string): string => PHRASES[id]?.text ?? id;
 export const speakerOf = (id: string): Speaker => PHRASES[id]?.speaker ?? 'narrator';
 

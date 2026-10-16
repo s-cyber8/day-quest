@@ -5,6 +5,9 @@ import { sfx, haptic } from '../core/audio';
 import { isPaused } from '../core/pause';
 import { reportMiss, reportHit } from '../core/frustration';
 import { P } from '../art/props';
+import { bgUrl, sprUrl, GAME_BG, GAME_BG_Y } from '../art/sprites';
+import { moka3d, setMoka } from '../art/moka';
+import { faceUrl, FeelKey } from '../content/stories';
 
 export type Level = 1 | 2 | 3;
 export type Outcome = { result: 'win'; stars: number } | { result: 'lose' };
@@ -36,6 +39,16 @@ export interface GameCtx {
   size(px: number): number;
   /** Animated hand demonstrating the gesture; shows until the first interaction and again after 6 s idle. */
   hand(provider: (() => HandHint) | null): void;
+  /** map a point of the stage background picture (fractions 0..1 of the image) to stage pixels */
+  bgPt(fx: number, fy: number): Pt;
+  /** particle burst of confetti sprites at stage-relative x,y */
+  burst(x: number, y: number, n?: number): void;
+  /** squash-and-stretch on an element */
+  squash(e: HTMLElement, amt?: number): void;
+  /** small screen shake: big wins only */
+  shake(): void;
+  /** Rafael's face bubble + Moka react (success / miss) */
+  react(kind: 'happy' | 'miss'): void;
 }
 export type Game = (ctx: GameCtx) => void;
 
@@ -70,11 +83,12 @@ export function createCtx(root: HTMLElement, level: Level, onEnd: (o: Outcome) =
       ], { duration: 2100, iterations: Infinity, easing: 'ease-in-out' });
     }
   };
-  const armIdle = () => { clearTimeout(idle); idle = window.setTimeout(() => { if (!isPaused()) showHand(); else armIdle(); }, 6000); };
+  const IDLE = [0, 6000, 10000, 16000][level];
+  const armIdle = () => { clearTimeout(idle); idle = window.setTimeout(() => { if (!isPaused()) showHand(); else armIdle(); }, IDLE); };
   root.addEventListener('pointerdown', () => { if (!provider) return; anim?.cancel(); anim = null; handEl.style.display = 'none'; armIdle(); }, true);
 
   const end = (o: Outcome) => { if (ended) return; ended = true; clearTimeout(idle); anim?.cancel(); handEl.style.display = 'none'; ctx.later(() => onEnd(o), o.result === 'win' ? 700 : 900); };
-  const ctx: GameCtx & { dispose(): void } = {
+  const ctx = {
     root, W: r.width, H: r.height, level, scale: 1,
     say: (...ids) => speak(...ids),
     praise() { sfx.chime(Math.floor(Math.random() * 4)); },
@@ -82,15 +96,18 @@ export function createCtx(root: HTMLElement, level: Level, onEnd: (o: Outcome) =
     budget(n) { allowed = n; },
     mistake(sound = true) {
       if (ended) return false;
-      nMistakes++; reportMiss(); root.dataset.mistakes = String(nMistakes);
+      nMistakes++; reportMiss(); root.dataset.mistakes = String(nMistakes); ctx.react('miss');
       if (nMistakes > allowed) { ctx.lose(); return true; }
       if (sound) { sfx.soft(); speak(nextRetry()); }
       return false;
     },
     mistakes: () => nMistakes,
     stars() { if (nMistakes === 0) return 3; return allowed === Infinity || nMistakes <= Math.ceil(allowed / 2) ? 2 : 1; },
-    win(stars) { end({ result: 'win', stars: stars ?? ctx.stars() }); },
-    lose() { sfx.soft(); end({ result: 'lose' }); },
+    win(stars) {
+      if (!ended) { ctx.burst(r.width / 2, r.height * 0.42, 26); ctx.burst(r.width * 0.22, r.height * 0.5, 12); ctx.burst(r.width * 0.78, r.height * 0.5, 12); ctx.shake(); ctx.react('happy'); sfx.good(3); haptic([20, 40, 30]); }
+      end({ result: 'win', stars: stars ?? ctx.stars() });
+    },
+    lose() { sfx.soft(); if (!ended) ctx.react('miss'); end({ result: 'lose' }); },
     finish() { ctx.win(); },
     later(fn, ms) {
       const run = () => { if (!alive) return; if (isPaused()) { setTimeout(run, 300); return; } fn(); };
@@ -114,8 +131,42 @@ export function createCtx(root: HTMLElement, level: Level, onEnd: (o: Outcome) =
       root.append(s); setTimeout(() => s.remove(), 900);
     },
     size: (px) => Math.max(72, px),
-    hand(p) { provider = p; clearTimeout(idle); if (p) setTimeout(showHand, 500); else showHand(); },
+    hand(p) { provider = p; clearTimeout(idle); if (!p) showHand(); else if (level === 1) setTimeout(showHand, 500); else armIdle(); },
     dispose() { alive = false; cancelAnimationFrame(rafId); clearTimeout(idle); anim?.cancel(); },
+  } as GameCtx & { dispose(): void };
+    // ---- stage background (the matching picture for this station) and the point mapping for it
+  const stageEl = root.closest('.screen') as HTMLElement | null;
+  const gameKey = stageEl?.dataset.game ?? '';
+  const bgName = GAME_BG[gameKey];
+  if (bgName) { root.style.backgroundImage = `url(${bgUrl(bgName)})`; root.classList.add('hasbg', 'bg-' + bgName); root.style.backgroundPosition = `50% ${(GAME_BG_Y[gameKey] ?? 1) * 100}%`; if (gameKey === 'dinner') root.classList.add('evening'); }
+  const IW = 768, IH = 1376;
+  ctx.bgPt = (fx, fy) => { const sc = Math.max(ctx.W / IW, ctx.H / IH); return { x: (ctx.W - IW * sc) / 2 + fx * IW * sc, y: (ctx.H - IH * sc) * (GAME_BG_Y[gameKey] ?? 1) + fy * IH * sc }; };
+  const rm = () => document.body.classList.contains('rm');
+  // ---- juice
+  const CONF = Array.from({ length: 19 }, (_, i) => sprUrl('rewards', `confetti-${i + 1}`));
+  ctx.burst = (x, y, n = 14) => {
+    if (rm()) return;
+    for (let i = 0; i < n; i++) {
+      const e = document.createElement('img'); e.src = CONF[i % CONF.length]; e.draggable = false;
+      Object.assign(e.style, { position: 'absolute', left: x - 12 + 'px', top: y - 12 + 'px', width: 18 + (i % 3) * 6 + 'px', pointerEvents: 'none', zIndex: '40' });
+      root.append(e);
+      const a = (Math.PI * 2 * i) / n + Math.random() * 0.5, d = 50 + Math.random() * 90;
+      const dx = Math.cos(a) * d, dy = Math.sin(a) * d - 40;
+      e.animate([{ transform: 'translate(0,0) rotate(0) scale(.4)', opacity: 1 }, { transform: `translate(${dx}px, ${dy}px) rotate(${(Math.random() - 0.5) * 540}deg) scale(1)`, opacity: 1, offset: 0.55 }, { transform: `translate(${dx * 1.15}px, ${dy + 90}px) rotate(${(Math.random() - 0.5) * 720}deg) scale(.8)`, opacity: 0 }], { duration: 900 + Math.random() * 350, easing: 'cubic-bezier(.2,.7,.4,1)', fill: 'forwards' }).onfinish = () => e.remove();
+    }
+  };
+  ctx.squash = (e, amt = 0.18) => { if (rm()) return; e.animate([{ transform: 'scale(1,1)' }, { transform: `scale(${1 + amt},${1 - amt})`, offset: 0.25 }, { transform: `scale(${1 - amt * 0.6},${1 + amt * 0.6})`, offset: 0.55 }, { transform: 'scale(1,1)' }], { duration: 380, easing: 'ease-out' }); };
+  ctx.shake = () => { if (rm()) return; root.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(-4px,2px)' }, { transform: 'translate(4px,-2px)' }, { transform: 'translate(-2px,1px)' }, { transform: 'translate(0,0)' }], { duration: 340, easing: 'ease-out' }); };
+  // ---- reactions: Rafael's face bubble (happy on success, disappointed -> calm on a miss) next to Moka
+  const rx = h('div', { class: 'react', 'data-testid': 'react' });
+  const face = h('img', { class: 'rface', alt: '', draggable: 'false' }); const mk = moka3d('idle'); mk.classList.add('rmoka');
+  rx.append(face, mk); root.append(rx);
+  let rt = 0;
+  const setFace = (k: FeelKey) => { face.src = faceUrl(k); rx.dataset.face = k; };
+  ctx.react = (kind) => {
+    clearTimeout(rt); rx.classList.add('on');
+    if (kind === 'happy') { setFace('happy'); setMoka(mk, 'happy'); rt = window.setTimeout(() => rx.classList.remove('on'), 1700); }
+    else { setFace('disappointed'); setMoka(mk, 'concerned'); rt = window.setTimeout(() => { setFace('calm'); rt = window.setTimeout(() => { rx.classList.remove('on'); setMoka(mk, 'idle'); }, 1500); }, 1500); }
   };
   return ctx;
 }
@@ -172,7 +223,7 @@ export function dragItems(ctx: GameCtx, items: DragItem[], onPlaced?: (it: DragI
         if (snap) {
           it.placed = true; e.style.left = snap.x - w / 2 + 'px'; e.style.top = snap.y - hh / 2 + 'px';
           e.style.transform = 'scale(.8)'; e.style.pointerEvents = 'none'; delete e.dataset.t;
-          sfx.place(); haptic(10); ctx.hit(); ctx.sparkle(rb.left + snap.x, rb.top + snap.y);
+          sfx.good(1); haptic(10); ctx.hit(); ctx.sparkle(rb.left + snap.x, rb.top + snap.y); ctx.burst(snap.x, snap.y, 8); ctx.squash(e, 0.22);
           onPlaced?.(it);
         } else { e.style.left = it.home.x - w / 2 + 'px'; e.style.top = it.home.y - hh / 2 + 'px'; e.style.transform = 'none'; }
       },

@@ -9,7 +9,7 @@ export default defineConfig({
   use: { baseURL: 'http://localhost:4173/day-quest/', trace: 'off', actionTimeout: 4000 },
   webServer: { command: 'npm run build && npm run preview', url: 'http://localhost:4173/day-quest/', reuseExistingServer: true, timeout: 120_000 },
   projects: [
-    { name: 'iphone-se', use: { ...devices['iPhone SE (3rd gen)'] }, testMatch: /layout\.spec\.ts/ },
+    { name: 'iphone-se', use: { ...devices['iPhone SE (3rd gen)'] }, testIgnore: /audio\.spec\.ts|audio-webkit\.spec\.ts/ },
     { name: 'iphone15pm', use: { ...devices['iPhone 15 Pro Max'] }, testMatch: /layout\.spec\.ts/ },
     { name: 'iphone13', use: { ...devices['iPhone 13'] }, testIgnore: /layout\.spec\.ts|audio\.spec\.ts/ },
     { name: 'pixel7', use: { ...devices['Pixel 7'], launchOptions: mic } },

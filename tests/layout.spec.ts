@@ -34,7 +34,7 @@ async function audit(page: Page, label: string) {
 test('layout: map, station screens, calm corner, sticker book, parent', async ({ page }, info) => {
   await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = ':root{--sat:47px;--sab:34px}'; document.head.append(s); }); });
   await newApp(page);
-  let r = await audit(page, 'map'); expect(r.back).toBe(false); // home screen: nothing to go back to
+  let r = await audit(page, 'map'); expect(r.back).toBe(true); // the map goes back to the home screen
   await shot(page, info, 'lay-map');
   await page.getByTestId('node-1').click(); await expect(page.locator('[data-screen=announce]')).toBeVisible(); await adv(page, 1200);
   r = await audit(page, 'announce'); expect(r.back).toBe(true); expect(r.backSize).toBeGreaterThanOrEqual(72);

@@ -40,7 +40,7 @@ test('bundled voice-over plays through Web Audio, including offline, from the pr
     const st = AudioBufferSourceNode.prototype.start; AudioBufferSourceNode.prototype.start = function (...a: []) { w.__srcStart++; return st.apply(this, a); };
     const pl = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { w.__audioPlay++; return pl.call(this); };
   });
-  await page.goto('./');
+  await page.goto('./?w=day');
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
   await page.waitForTimeout(4000); // let the service worker precache the clips
   await page.reload(); await expect(page.locator('[data-screen=map]')).toBeVisible();
@@ -62,4 +62,26 @@ test('parent mode: original clip button + test sound reports a bundled clip', as
   await page.getByTestId('test-sound').scrollIntoViewIfNeeded(); await page.getByTestId('test-sound').click();
   await expect(page.getByTestId('sound-report')).toContainText('bundled clip: found', { timeout: 15000 });
   await expect(page.getByTestId('sound-report')).toContainText('speech path used: bundled');
+});
+
+test('story voice-over (narrator + Moka, with emotion tags) plays through Web Audio offline from the precache', async ({ page, context }) => {
+  await page.addInitScript(() => {
+    const w = window as unknown as { __srcStart: number; __audioPlay: number };
+    w.__srcStart = 0; w.__audioPlay = 0;
+    const st = AudioBufferSourceNode.prototype.start; AudioBufferSourceNode.prototype.start = function (...a: []) { w.__srcStart++; return st.apply(this, a); };
+    const pl = HTMLMediaElement.prototype.play; HTMLMediaElement.prototype.play = function () { w.__audioPlay++; return pl.call(this); };
+  });
+  await page.goto('./?w=stories');
+  await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
+  await page.waitForFunction(async () => !!(await caches.match(new URL('audio/narrator/s03.sit.mp3', document.baseURI).href)) && !!(await caches.match(new URL('audio/moka/story.intro.mp3', document.baseURI).href)), null, { timeout: 60000 });
+  await page.reload(); await expect(page.getByTestId('storypick')).toBeVisible();
+  await context.setOffline(true);
+  // Moka's intro line (first visit was before the reload, so use the picker line) plays from the cache
+  await expect.poll(() => page.evaluate(() => document.body.dataset.speech), { timeout: 10000 }).toBe('bundled');
+  await page.getByTestId('story-s03').click();
+  await expect(page.locator('.story[data-step=situation]')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __srcStart: number }).__srcStart), { timeout: 10000 }).toBeGreaterThan(1);
+  expect(await page.evaluate(() => (window as unknown as { __audioPlay: number }).__audioPlay)).toBe(0);
+  expect(await page.evaluate(() => (document.querySelector('.story .sfig img') as HTMLImageElement).naturalWidth)).toBeGreaterThan(400); // scene image from the precache
+  await context.setOffline(false);
 });

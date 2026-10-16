@@ -27,10 +27,10 @@ export function stationCard(s: Station, small = false): HTMLElement {
 // ---------- confetti-lite (gentle, no flashing) ----------
 export function confetti(parent: HTMLElement, n = 26) {
   if (document.body.classList.contains('rm')) return;
-  const cols = ['#ffb3c1', '#ffe9a8', '#a8e6cf', '#bfe3f7', '#d6c8f5', '#ffd3b6'];
+  const base = import.meta.env.BASE_URL;
   for (let i = 0; i < n; i++) {
-    const c = h('i', { class: 'confetti' });
-    c.style.left = rand(2, 98) + '%'; c.style.background = cols[i % cols.length];
+    const c = h('img', { class: 'confetti', src: `${base}assets/game/sprites/rewards/confetti-${1 + (i % 19)}.png`, alt: '', draggable: 'false' });
+    c.style.left = rand(2, 98) + '%'; c.style.width = rand(16, 30) + 'px';
     c.style.animationDuration = rand(3.2, 5.2) + 's'; c.style.animationDelay = rand(0, 1.4) + 's';
     parent.append(c);
   }

@@ -1,6 +1,6 @@
 import { h, frag, rand } from '../core/dom';
 import { P } from '../art/props';
-import { mokaSvg } from '../art/moka';
+import { moka3d } from '../art/moka';
 import { asset } from '../content/stations';
 import { sfx } from '../core/audio';
 import { speak } from '../core/speech';
@@ -18,7 +18,7 @@ export function renderNight(fresh: boolean, onDone: () => void): HTMLElement {
     h('img', { class: 'head', src: asset('avatar/rafael-football.png'), alt: '', draggable: 'false' }),
     h('div', { class: 'blanket' }),
     h('div', { class: 'zz' }, 'z z'),
-    h('div', { class: 'mokan' }, mokaSvg('sleepy')));
+    h('div', { class: 'mokan' }, moka3d('sleepy')));
   n.append(h('div', { class: 'moon' }), scene,
     h('div', { class: 'msg' }, 'לילה טוב רפאל. נתראה בבוקר'),
     h('button', { class: 'rbtn nightgo', 'data-testid': 'night-continue', 'aria-label': 'המשך', onclick: () => onDone() }, frag(P.play())));

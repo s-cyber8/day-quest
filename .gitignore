@@ -5,8 +5,10 @@ playwright-report
 dev-dist
 screenshots
 .env
-scripts/audition/
+scripts/audition/*
+!scripts/audition/cer-results-v2.md
 audio-work/
 flagged.json
 *.log
 __pycache__/
+.DS_Store

@@ -2,7 +2,7 @@ import { Game, el, put, centerOf, rel, triesBar, Pt } from './engine';
 import { P } from '../art/props';
 import { asset } from '../content/stations';
 import { sfx, haptic } from '../core/audio';
-import { mokaSvg, setMoka } from '../art/moka';
+import { moka3d, setMoka } from '../art/moka';
 import { h, drag, clamp } from '../core/dom';
 
 const avatar = (hgt: number) => h('img', { src: asset('avatar/rafael-football.png'), style: `height:${hgt}px;display:block`, draggable: 'false' });
@@ -12,24 +12,22 @@ export const walk: Game = (ctx) => {
   const { root, W, H } = ctx;
   const L = ctx.level;
   ctx.budget(L === 1 ? 4 : L === 2 ? 3 : 2);
-  const speed = [0, 120, 160, 200][L], gap = [0, 420, 360, 300][L], n = [0, 4, 6, 8][L];
+  const speed = [0, 120, 175, 235][L], gap = [0, 420, 350, 290][L], n = [0, 4, 6, 9][L];
   const groundY = H * 0.62, ax = W * 0.3;
   const obst = Array.from({ length: n }, (_, i) => 520 + i * gap);
   const endX = obst[n - 1] + 460;
   const world = el('abs'); Object.assign(world.style, { left: '0', top: '0', width: '100%', height: '100%', overflow: 'hidden' });
-  const road = el('abs'); Object.assign(road.style, { left: '0', right: '0', top: groundY + 'px', bottom: '0', background: 'linear-gradient(#e9dfc9,#d8c9a8)' });
-  const grass = el('abs'); Object.assign(grass.style, { left: '0', right: '0', top: groundY - 8 + 'px', height: '14px', background: '#9fdc9a', borderRadius: '7px' });
-  root.append(road, grass, world);
+  root.append(world);
   const puddles = obst.map((x) => { const e = put(el('abs', P.puddle()), 0, groundY + 8, 110, 70); world.append(e); return e; });
-  const stars = obst.map((x, i) => { const e = put(el('abs jiggle', P.star()), 0, groundY - 130, 56); e.dataset.i = String(i); world.append(e); return e; });
-  const home = put(el('abs', P.cloud()), 0, groundY - 50, 130, 100); world.append(home);
+  const stars = obst.map((x, i) => { const e = put(el('abs jiggle', P.star()), 0, groundY - 130, 52); e.dataset.i = String(i); world.append(e); return e; });
+  const home = put(el('abs', P.rainbow()), 0, groundY - 60, 190, 110); world.append(home);
   const av = el('abs'); av.append(avatar(120)); av.style.left = ax - 40 + 'px'; av.style.zIndex = '3'; root.append(av);
-  const moka = mokaSvg('walking'); const mw = el('abs'); mw.append(moka); put(mw, ax - 90, groundY - 36, 84, 84); mw.style.zIndex = '2'; root.append(mw);
+  const moka = moka3d('walking'); const mw = el('abs'); mw.append(moka); put(mw, ax - 96, groundY + 6, 66, 40); mw.style.zIndex = '2'; root.append(mw);
   const left = triesBar(ctx, (L === 1 ? 4 : L === 2 ? 3 : 2) + 1); left((L === 1 ? 4 : L === 2 ? 3 : 2) + 1);
   const total = (L === 1 ? 4 : L === 2 ? 3 : 2) + 1;
   let dist = 0, jt = -1, state: 'run' | 'splash' | 'done' = 'run', hold = 0;
   const JUMP = 0.8, HEIGHT = 120;
-  const jump = () => { if (state !== 'run' || jt >= 0) return; jt = 0; sfx.boing(); haptic(8); };
+  const jump = () => { if (state !== 'run' || jt >= 0) return; jt = 0; sfx.boing(); haptic(8); ctx.squash(av, 0.12); };
   const tap = el('abs'); Object.assign(tap.style, { inset: '0', zIndex: '4' }); tap.dataset.t = '1'; root.append(tap);
   tap.addEventListener('pointerdown', jump);
   ctx.say('g.5.how');
@@ -37,7 +35,7 @@ export const walk: Game = (ctx) => {
   const place = () => {
     const sx = (wx: number) => ax + (wx - dist);
     obst.forEach((x, i) => { puddles[i].style.left = sx(x) - 55 + 'px'; stars[i].style.left = sx(x + gap / 2) - 28 + 'px'; });
-    home.style.left = sx(endX) - 65 + 'px';
+    home.style.left = sx(endX) - 95 + 'px';
     const jy = jt >= 0 ? 4 * HEIGHT * jt * (1 - jt) : 0;
     av.style.top = groundY - 124 - jy + 'px';
     av.style.transform = state === 'splash' ? 'rotate(-18deg)' : `rotate(${jt >= 0 ? -6 : 0}deg)`;
@@ -60,8 +58,8 @@ export const walk: Game = (ctx) => {
         if (!lost) ctx.say('retry.1');
       }
     });
-    stars.forEach((s, i) => { if (!s.dataset.got && Math.abs(obst[i] + gap / 2 - dist) < 36) { s.dataset.got = '1'; s.classList.add('pop'); sfx.chime(i); const c = centerOf(s); ctx.sparkle(c.x, c.y); } });
-    if (dist >= endX - 30) { state = 'done'; setMoka(moka, 'happy'); sfx.big(); ctx.praise(); ctx.win(); }
+    stars.forEach((s, i) => { if (!s.dataset.got && Math.abs(obst[i] + gap / 2 - dist) < 36) { s.dataset.got = '1'; s.classList.add('pop'); sfx.good(i); const c = centerOf(s); ctx.sparkle(c.x, c.y); const rb = root.getBoundingClientRect(); ctx.burst(c.x - rb.left, c.y - rb.top, 8); } });
+    if (dist >= endX - 30) { state = 'done'; setMoka(moka, 'jump'); sfx.big(); ctx.praise(); ctx.win(); }
     place();
   });
   void clamp; void drag;
@@ -72,10 +70,10 @@ export const tower: Game = (ctx) => {
   const { root, W, H } = ctx;
   const L = ctx.level;
   ctx.budget(L === 1 ? 3 : L === 2 ? 2 : 2);
-  const goal = [0, 4, 6, 8][L];
-  const bw = W * [0, 0.36, 0.3, 0.24][L], bh = 40, omega = [0, 1.5, 2.1, 2.8][L], amp = W * 0.3;
+  const goal = [0, 4, 6, 9][L];
+  const bw = W * [0, 0.36, 0.28, 0.22][L], bh = 40, omega = [0, 1.5, 2.3, 3.2][L], amp = W * 0.3;
   const baseY = H * 0.88, cx = W / 2, top0 = H * 0.06;
-  const ground = el('abs'); Object.assign(ground.style, { left: '0', right: '0', top: baseY + 'px', height: '14px', background: '#d8c9a8', borderRadius: '7px' }); root.append(ground);
+  const ground = el('abs'); Object.assign(ground.style, { left: '8%', right: '8%', top: baseY + 'px', height: '10px', background: 'rgba(120,80,40,.35)', borderRadius: '5px' }); root.append(ground);
   const colors = ['#ff9bb3', '#8fd0f0', '#ffe28a', '#a8e6cf', '#c8b6f2', '#ffb870', '#9fdc9a', '#f6a6e0'];
   const stack: { x: number; e: HTMLElement }[] = [];
   let t = 0, falling: { e: HTMLElement; x: number; y: number; vy: number; ci: number } | null = null, ended = false, idx = 0;
@@ -95,7 +93,7 @@ export const tower: Game = (ctx) => {
     if (ended || falling || stack.length >= goal + 1) return;
     const x = cx + Math.sin(t * omega) * amp;
     const e = mkBlock(x, top0 + 30, col); sw.style.opacity = '0'; root.append(e); sfx.whoosh();
-    falling = { e, x, y: top0 + 30, vy: 0, ci: col };
+    falling = { e, x, y: top0 + 30, vy: 0, ci: col }; ctx.squash(e, 0.1);
   });
   const topple = (k: number) => {
     // everything above level k falls off
@@ -110,7 +108,7 @@ export const tower: Game = (ctx) => {
     }
     return false;
   };
-  const star = () => { const e = put(el('abs', P.star()), stack[stack.length - 1].x, baseY - stack.length * bh - 30, 66); e.style.animation = 'starin 1s both'; root.append(e); sfx.sparkle(); ctx.say('g.6.top'); };
+  const star = () => { const e = put(el('abs', P.star()), stack[stack.length - 1].x, baseY - stack.length * bh - 34, 70); e.style.animation = 'starin 1s both'; root.append(e); sfx.sparkle(); ctx.say('g.6.top'); ctx.burst(stack[stack.length - 1].x, baseY - stack.length * bh - 34, 14); };
   ctx.loop((dt) => {
     if (ended) return;
     t += dt; root.dataset.swing = ((Math.sin(t * omega) * amp) / W).toFixed(3); root.dataset.bw = String(bw / W);
@@ -139,19 +137,19 @@ export const football: Game = (ctx) => {
   const L = ctx.level;
   ctx.budget(2);
   const gw = Math.min(W * 0.86, 360), gh = gw * 0.55; const gy = H * 0.2;
-  const pitch = el('abs'); Object.assign(pitch.style, { left: '-2%', right: '-2%', top: gy - gh * 0.55 + 'px', bottom: '0', background: 'linear-gradient(#9fdc9a,#7fcf86)', borderRadius: '40px 40px 0 0' });
-  const goal = put(el('abs', P.goal()), W / 2, gy, gw, gh); root.append(pitch, goal);
-  const gsz = [0, 78, 90, 100][L];
-  const goalie = put(el('abs', P.goalie()), W / 2, gy + gh * 0.12, gsz); root.append(goalie);
-  const defender = put(el('abs', P.goalie()), W / 2, H * 0.5, 80); defender.style.filter = 'hue-rotate(160deg)'; defender.style.display = L === 3 ? 'block' : 'none'; root.append(defender);
+  const goal = put(el('abs', P.goal()), W / 2, gy, gw, gh); goal.style.zIndex = '2'; root.append(goal);
+  [W * 0.1, W * 0.9].forEach((x) => root.append(put(el('abs', P.cone()), x, H * 0.55, 34, 34)));
+  const gsz = [0, 78, 90, 100][L], gwid = gsz * 0.62, ghei = gsz * 1.45;
+  const goalie = put(el('abs', P.goalie()), W / 2, gy + gh * 0.2, gwid, ghei); goalie.style.zIndex = '3'; root.append(goalie);
+  const defender = put(el('abs', P.goalie()), W / 2, H * 0.5, 54, 130); defender.style.filter = 'hue-rotate(160deg)'; defender.style.display = L === 3 ? 'block' : 'none'; defender.style.zIndex = '3'; root.append(defender);
   const bsz = 88, home = { x: W / 2, y: H * 0.8 };
-  const ball = put(el('abs', P.football()), home.x, home.y, bsz); ball.dataset.t = '1'; ball.style.zIndex = '5'; root.append(ball);
+  const ball = put(el('abs', P.football()), home.x, home.y, bsz); ball.dataset.t = '1'; ball.style.zIndex = '5'; root.append(ball); ctx.squash(ball, 0.1);
   const av = el('abs'); av.append(avatar(Math.min(H * 0.24, 190))); Object.assign(av.style, { left: W * 0.06 + 'px', bottom: '2%' }); root.append(av);
   const shotsLeft = triesBar(ctx, 5, 'bottom'); shotsLeft(5);
-  const gX = W / 2, omega = [0, 0.9, 1.5, 2.1][L], track = [0, 0, 0.5, 0.75][L], reach = gsz * 0.55;
+  const gX = W / 2, omega = [0, 0.9, 1.7, 2.6][L], track = [0, 0, 0.55, 0.85][L], reach = gsz * 0.55;
   let t = 0, shooting = false, shots = 0, goals = 0, ended = false;
   const gAt = (tt: number) => gX + Math.sin(tt * omega) * gw * 0.3;
-  ctx.loop((dt) => { t += dt; root.dataset.gk = ((gAt(t) - gX) / gw).toFixed(3); root.dataset.gw = String(gw); root.dataset.def = L === 3 ? String(Math.sin(t * 1.3 + 1) * 0.32) : ''; if (!shooting) goalie.style.left = gAt(t) - gsz / 2 + 'px'; if (L === 3 && !shooting) defender.style.left = W / 2 + Math.sin(t * 1.3 + 1) * W * 0.32 - 40 + 'px'; });
+  ctx.loop((dt) => { t += dt; root.dataset.gk = ((gAt(t) - gX) / gw).toFixed(3); root.dataset.gw = String(gw); root.dataset.def = L === 3 ? String(Math.sin(t * 1.3 + 1) * 0.32) : ''; if (!shooting) goalie.style.left = gAt(t) - gwid / 2 + 'px'; if (L === 3 && !shooting) defender.style.left = W / 2 + Math.sin(t * 1.3 + 1) * W * 0.32 - 40 + 'px'; });
   ctx.say('g.7.how');
   ctx.hand(() => ({ kind: 'drag', from: home, to: { x: W / 2, y: gy + gh * 0.4 } }));
   let sx = 0, sy = 0;
@@ -173,13 +171,13 @@ export const football: Game = (ctx) => {
     ball.style.transition = `all ${FL}s cubic-bezier(.2,.6,.3,1)`;
     ball.style.left = aim - bsz * 0.31 + 'px'; ball.style.top = ty + 'px'; ball.style.transform = 'scale(.62)';
     const g0 = gAt(t), gEnd = g0 + (aim - g0) * track;
-    goalie.style.transition = `left ${FL}s ease-out`; goalie.style.left = gEnd - gsz / 2 + 'px';
+    goalie.style.transition = `left ${FL}s ease-out`; goalie.style.left = gEnd - gwid / 2 + 'px';
     let blockedBy = '';
     if (L === 3) { const f = 0.55; const bx = home.x + (aim - home.x) * f; const dxp = W / 2 + Math.sin(t * 1.3 + 1) * W * 0.32; if (Math.abs(dxp - bx) < 46) blockedBy = 'def'; }
     if (!blockedBy && !out && Math.abs(gEnd - aim) < reach) blockedBy = 'keeper';
     ctx.later(() => {
       const goalNow = !blockedBy && !out;
-      if (goalNow) { goals++; ctx.hit(); sfx.big(); ctx.say('g.7.goal'); for (let i = 0; i < 4; i++) ctx.later(() => ctx.sparkle(root.getBoundingClientRect().left + aim + (i - 1.5) * 40, root.getBoundingClientRect().top + ty - 20), i * 150); }
+      if (goalNow) { goals++; ctx.hit(); sfx.big(); ctx.say('g.7.goal'); ctx.burst(aim, ty, 16); ctx.shake(); ctx.react('happy'); for (let i = 0; i < 4; i++) ctx.later(() => ctx.sparkle(root.getBoundingClientRect().left + aim + (i - 1.5) * 40, root.getBoundingClientRect().top + ty - 20), i * 150); }
       else { sfx.soft(); if (blockedBy === 'def') { ball.style.transition = 'all .3s'; ball.style.left = aim - 150 + 'px'; } ctx.say('g.7.saved'); }
       shotsLeft(5 - shots);
       if (!goalNow && ctx.mistake(false)) return;
@@ -195,15 +193,14 @@ export const ninja: Game = (ctx) => {
   const { root, W, H } = ctx;
   const L = ctx.level;
   ctx.budget(L === 1 ? 4 : L === 2 ? 3 : 2);
-  const segs: ('swing' | 'hop')[] = L === 1 ? ['swing', 'swing', 'hop', 'swing', 'hop'] : L === 2 ? ['swing', 'swing', 'hop', 'swing', 'hop', 'swing', 'hop'] : ['swing', 'swing', 'hop', 'swing', 'hop', 'swing', 'hop', 'swing', 'hop'];
+  const segs: ('swing' | 'hop')[] = L === 1 ? ['swing', 'swing', 'hop', 'swing', 'hop'] : L === 2 ? ['swing', 'swing', 'hop', 'swing', 'hop', 'swing', 'hop'] : ['swing', 'swing', 'hop', 'swing', 'hop', 'swing', 'hop', 'swing', 'hop', 'swing', 'hop'];
   const gap = Math.max(140, W * 0.36);
-  const zoneW = [0, 0.4, 0.28, 0.18][L], period = [0, 2.2, 1.7, 1.3][L];
+  const zoneW = [0, 0.4, 0.26, 0.15][L], period = [0, 2.2, 1.5, 1.05][L];
   const world = el('abs'); Object.assign(world.style, { left: '0', top: '0', width: gap * (segs.length + 3) + 'px', height: H + 'px', transition: 'transform 1s cubic-bezier(.45,.05,.3,1)' });
   const barY = H * 0.24;
-  world.innerHTML = `<div class="abs" style="left:0;right:0;top:${barY}px;height:14px;background:#ef6b6b;border-radius:7px"></div>` +
-    Array.from({ length: segs.length }, (_, i) => `<div class="abs" style="left:${W * 0.5 + i * gap * 1.2}px;top:${barY}px;width:12px;height:${H * 0.08}px;background:#f59a9a;border-radius:6px"></div>`).join('') +
-    `<div class="abs" style="left:0;right:0;top:${H * 0.62}px;height:${H * 0.38}px;background:#cdeccf"></div>`;
-  segs.forEach((s, i) => { if (s === 'hop') world.append(put(el('abs', P.cushion()), W * 0.5 + gap * (i + 0.5), H * 0.62 - 16, 110, 80)); });
+  world.style.zIndex = '1';
+  world.innerHTML = `<div class="abs" style="left:0;right:0;top:${barY}px;height:12px;background:#ef6b6b;border-radius:6px;box-shadow:0 4px 6px rgba(0,0,0,.2)"></div>`;
+  segs.forEach((s, i) => { world.append(put(el('abs', s === 'hop' ? P.cushion() : P.monkey()), W * 0.5 + gap * (i + 0.5), s === 'hop' ? H * 0.62 - 16 : barY + 58, s === 'hop' ? 120 : gap * 0.9, s === 'hop' ? 80 : 90)); });
   root.append(world);
   const mat = put(el('abs', P.cushion()), W / 2, H * 0.62 - 4, 190, 90); mat.style.opacity = '0'; mat.style.zIndex = '1'; root.append(mat);
   const av = el('abs'); av.append(avatar(Math.min(H * 0.26, 210)));
@@ -234,7 +231,7 @@ export const ninja: Game = (ctx) => {
       world.style.transform = `translateX(${-i * gap}px)`;
       av.style.transform = hop ? 'rotate(0)' : `rotate(${i % 2 ? -12 : 12}deg)`;
       if (hop) { av.style.top = H * 0.62 - 230 + 'px'; ctx.later(() => (av.style.top = H * 0.62 - 150 + 'px'), 350); }
-      ctx.later(() => { sfx.chime(i); const c = centerOf(av); ctx.sparkle(c.x, c.y); if (i >= segs.length) { ctx.praise(); ctx.win(); } else { busy = false; newZone(); } }, 1050);
+      ctx.later(() => { sfx.good(i); const c = centerOf(av); ctx.sparkle(c.x, c.y); const rb = root.getBoundingClientRect(); ctx.burst(c.x - rb.left, c.y - rb.top, 8); if (i >= segs.length) { ctx.praise(); ctx.win(); } else { busy = false; newZone(); } }, 1050);
     } else {
       mat.style.opacity = '1'; av.style.top = H * 0.62 - 150 + 'px'; av.style.transform = 'rotate(70deg)'; sfx.soft();
       const lost = ctx.mistake(false); left(Math.max(0, total - ctx.mistakes())); if (!lost) ctx.say('g.8.fall');

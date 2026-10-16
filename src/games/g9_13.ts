@@ -1,8 +1,10 @@
 import { Game, GameCtx, el, put, dragItems, DragItem, inside, rel, swipePop, centerOf, shuffle, triesBar, Pt } from './engine';
 import { P } from '../art/props';
-import { asset, STATIONS, imgOf } from '../content/stations';
+import { asset } from '../content/stations';
+import { sprUrl } from '../art/sprites';
+import { faceUrl } from '../content/stories';
 import { sfx, haptic } from '../core/audio';
-import { mokaSvg, setMoka } from '../art/moka';
+import { moka3d, setMoka } from '../art/moka';
 import { h, drag, frag, clamp } from '../core/dom';
 
 const avatar = (hgt: number) => h('img', { src: asset('avatar/rafael-football.png'), style: `height:${hgt}px;display:block`, draggable: 'false' });
@@ -33,7 +35,7 @@ export const build: Game = (ctx) => {
     const copy = which === 'copy';
     const ts = 76;
     const bTop = copy ? H * 0.27 : H * 0.02, bH = copy ? H * 0.42 : H * 0.64, bL = W * 0.03, bW = W * 0.94;
-    const board = el('abs'); board.dataset.testid = 'board'; Object.assign(board.style, { left: bL + 'px', top: bTop + 'px', width: bW + 'px', height: bH + 'px', borderRadius: '30px', background: 'rgba(255,255,255,.6)', border: '4px dashed rgba(47,74,99,.18)' });
+    const board = el('abs'); board.dataset.testid = 'board'; Object.assign(board.style, { left: bL + 'px', top: bTop + 'px', width: bW + 'px', height: bH + 'px', borderRadius: '30px', background: 'rgba(255,255,255,.55)', border: '4px dashed rgba(47,74,99,.22)', zIndex: '1' });
     root.append(board);
     const COLN = 4, ROWN = 3;
     const cell = (c: number, r: number): Pt => ({ x: bL + (bW / COLN) * (c + 0.5), y: bTop + (bH / ROWN) * (r + 0.5) });
@@ -43,7 +45,7 @@ export const build: Game = (ctx) => {
     const snapFree = (v: number) => Math.round(v / 24) * 24;
     let count = 0, ref: { c: number; r: number; kind: Kind }[] = [];
     if (copy) {
-      const n = ctx.level === 2 ? 3 : 5; ctx.budget(ctx.level === 2 ? 2 : 1);
+      const n = ctx.level === 2 ? 4 : 6; ctx.budget(ctx.level === 2 ? 2 : 1);
       const cells = shuffle(Array.from({ length: COLN * ROWN }, (_, i) => ({ c: i % COLN, r: Math.floor(i / COLN) }))).slice(0, n);
       ref = cells.map((x) => ({ ...x, kind: KINDS[Math.floor(Math.random() * 3)] }));
       root.dataset.ref = ref.map((t) => `${t.c},${t.r},${t.kind}`).join(';');
@@ -107,23 +109,28 @@ export const build: Game = (ctx) => {
   }
 };
 
-/* 10 — Memory. L1: 4 pairs with a preview. L2: 6 pairs. L3: 8 pairs. Limited wrong tries. */
+/* 10 — Memory (bg-kindergarten-playroom). Card back = the wooden star card; faces = Rafael's feelings and toys. L1: 4 pairs with a preview. L2: 6 pairs. L3: 8 pairs. Limited wrong tries. */
 export const memory: Game = (ctx) => {
   const { root, W, H } = ctx;
-  const L = ctx.level, pairs = [0, 4, 6, 8][L], cols = [0, 2, 3, 4][L], budget = [0, 6, 8, 10][L];
+  const L = ctx.level, pairs = [0, 4, 6, 8][L], cols = [0, 2, 3, 4][L], budget = [0, 6, 7, 8][L];
   ctx.budget(budget);
-  const picks = shuffle(STATIONS).slice(0, pairs);
+  const POOL = [
+    ...(['happy', 'angry', 'sad', 'scared', 'disappointed', 'calm'] as const).map((k) => ({ id: 'f-' + k, src: faceUrl(k), round: true })),
+    ...[['bath', 'duck'], ['food', 'apple'], ['sports', 'football'], ['toys', 'teddy'], ['toys', 'star-gold'], ['food', 'banana'], ['bedroom', 'alarm-clock'], ['sports', 'trophy']].map(([a, n]) => ({ id: `p-${n}`, src: sprUrl(a, n), round: false })),
+  ];
+  const picks = shuffle(POOL).slice(0, pairs);
   const deck = shuffle([...picks, ...picks].map((s, i) => ({ s, i })));
   const rows = Math.ceil(deck.length / cols), gap = 10;
   const cw = Math.min((W - 24 - gap * (cols - 1)) / cols, 200), ch = Math.min((H - 80 - gap * (rows - 1)) / rows, cw * 1.05);
-  const grid = el('abs'); Object.assign(grid.style, { left: '50%', top: '50%', transform: 'translate(-50%,-46%)', display: 'grid', gridTemplateColumns: `repeat(${cols}, ${cw}px)`, gap: gap + 'px' });
+  const grid = el('abs'); Object.assign(grid.style, { left: '50%', top: '50%', transform: 'translate(-50%,-46%)', display: 'grid', gridTemplateColumns: `repeat(${cols}, ${cw}px)`, gap: gap + 'px', zIndex: '3' });
   const cards = deck.map((d) => {
-    const c = h('button', { class: 'mcard', 'data-t': '1', 'data-id': String(d.s.id) });
+    const c = h('button', { class: 'mcard', 'data-t': '1', 'data-id': d.s.id });
     Object.assign(c.style, { width: cw + 'px', height: ch + 'px', perspective: '700px', position: 'relative' });
-    const inner = h('div', { class: 'mi' }); Object.assign(inner.style, { position: 'absolute', inset: '0', transition: 'transform .5s', transformStyle: 'preserve-3d' });
-    const front = h('div', {}, h('img', { src: imgOf(d.s), draggable: 'false', style: 'width:100%;height:100%;object-fit:cover;border-radius:20px' }));
-    Object.assign(front.style, { position: 'absolute', inset: '0', backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: '20px', background: '#fff', padding: '4px', boxShadow: 'var(--shadow)' });
-    const back = h('div', {}); back.innerHTML = P.paw(); Object.assign(back.style, { position: 'absolute', inset: '0', backfaceVisibility: 'hidden', borderRadius: '20px', background: 'linear-gradient(135deg,#8fd0f0,#bfe3f7)', color: '#fff', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow)', padding: '26%' });
+    const inner = h('div', { class: 'mi' }); Object.assign(inner.style, { position: 'absolute', inset: '0', transition: 'transform .5s cubic-bezier(.3,1.3,.5,1)', transformStyle: 'preserve-3d' });
+    const front = h('div', {}, h('img', { src: d.s.src, draggable: 'false', style: `width:100%;height:100%;object-fit:${d.s.round ? 'cover' : 'contain'};border-radius:${d.s.round ? '50%' : '12px'};padding:${d.s.round ? '0' : '10%'}` }));
+    Object.assign(front.style, { position: 'absolute', inset: '0', backfaceVisibility: 'hidden', transform: 'rotateY(180deg)', borderRadius: '20px', background: '#fff', padding: d.s.round ? '8%' : '4px', boxShadow: 'var(--shadow)' });
+    const back = h('div', {}, h('img', { src: sprUrl('toys', 'card-back'), draggable: 'false', style: 'width:100%;height:100%;object-fit:contain' }));
+    Object.assign(back.style, { position: 'absolute', inset: '0', backfaceVisibility: 'hidden', borderRadius: '20px', display: 'grid', placeItems: 'center' });
     inner.append(front, back); c.append(inner); grid.append(c);
     return { c, inner, id: d.s.id, matched: false };
   });
@@ -136,12 +143,12 @@ export const memory: Game = (ctx) => {
   ctx.hand(() => (busy ? null : { kind: 'tap', at: rel(ctx, cards[0].c) }));
   cards.forEach((k) => k.c.addEventListener('click', () => {
     if (busy || k.matched || open.includes(k)) return;
-    sfx.flip(); show(k, true); open.push(k);
+    sfx.flip(); show(k, true); ctx.squash(k.c, 0.08); open.push(k);
     if (open.length < 2) return;
     busy = true; const [a, b] = open;
     if (a.id === b.id) {
       a.matched = b.matched = true; matched++; open = [];
-      ctx.later(() => { sfx.chime(matched); ctx.hit(); const c = centerOf(a.c); ctx.sparkle(c.x, c.y); const d = centerOf(b.c); ctx.sparkle(d.x, d.y); busy = false; if (matched === pairs) ctx.later(() => { ctx.praise(); ctx.win(); }, 600); }, 500);
+      ctx.later(() => { sfx.good(matched); ctx.hit(); const c = centerOf(a.c); ctx.sparkle(c.x, c.y); const d = centerOf(b.c); ctx.sparkle(d.x, d.y); const rb = root.getBoundingClientRect(); ctx.burst(c.x - rb.left, c.y - rb.top, 8); ctx.burst(d.x - rb.left, d.y - rb.top, 8); busy = false; if (matched === pairs) ctx.later(() => { ctx.praise(); ctx.win(); }, 600); }, 500);
     } else {
       ctx.later(() => { sfx.soft(); const lost = ctx.mistake(false); left(Math.max(0, budget + 1 - ctx.mistakes())); if (lost) return;
         ctx.later(() => { show(a, false); show(b, false); open = []; busy = false; }, 900); }, 700);
@@ -155,7 +162,7 @@ export const dinner: Game = (ctx) => {
   const L = ctx.level;
   ctx.budget(L === 1 ? 4 : L === 2 ? 3 : 2);
   const pw = Math.min(W * 0.84, 330), cx = W / 2, cy = H * 0.28;
-  const plate = put(el('abs', P.plate()), cx, cy, pw, pw * 0.72); root.append(plate);
+  const plate = put(el('abs', P.plate()), cx, cy, pw, pw * 0.72); plate.style.zIndex = '1'; root.append(plate);
   const zs: Record<string, Pt> = { veg: { x: cx - pw * 0.2, y: cy - pw * 0.06 }, prot: { x: cx + pw * 0.2, y: cy - pw * 0.06 }, carb: { x: cx, y: cy + pw * 0.15 } };
   const zEl: Record<string, HTMLElement> = {};
   (['veg', 'prot', 'carb'] as const).forEach((k) => {
@@ -165,8 +172,8 @@ export const dinner: Game = (ctx) => {
   });
   const food: { id: string; kind: string; html: string }[] = L === 1
     ? [{ id: 'broccoli', kind: 'veg', html: P.broccoli() }, { id: 'chicken', kind: 'prot', html: P.chicken() }, { id: 'sweet', kind: 'carb', html: P.sweet() }]
-    : [{ id: 'broccoli', kind: 'veg', html: P.broccoli() }, { id: 'carrot', kind: 'veg', html: P.carrot() }, { id: 'chicken', kind: 'prot', html: P.chicken() }, { id: 'egg', kind: 'prot', html: P.egg() }, { id: 'sweet', kind: 'carb', html: P.sweet() }, { id: 'rice', kind: 'carb', html: P.rice() }];
-  const sweets = L === 3 ? [{ id: 'lolly', kind: 'candy', html: P.lollipop() }, { id: 'cake', kind: 'candy', html: P.cake() }] : [];
+    : [{ id: 'broccoli', kind: 'veg', html: P.broccoli() }, { id: 'apple', kind: 'veg', html: P.apple() }, ...(L === 3 ? [{ id: 'banana', kind: 'veg', html: P.banana() }] : []), { id: 'chicken', kind: 'prot', html: P.chicken() }, { id: 'sweet', kind: 'carb', html: P.sweet() }, { id: 'toast', kind: 'carb', html: P.toast() }];
+  const sweets = L === 3 ? [{ id: 'lolly', kind: 'candy', html: P.lollipop() }, { id: 'candy2', kind: 'candy', html: P.cake() }] : [];
   const all = shuffle([...food, ...sweets]);
   const counts: Record<string, number> = { veg: 0, prot: 0, carb: 0 };
   let toPlace = food.length, said = false;
@@ -206,9 +213,8 @@ export const bath: Game = (ctx) => {
   // --- scene: wall, Rafael (cut out of the bath station picture), then water, foam and the tub rim in front of him
   const hA = Math.min(H * 0.68, 470), wA = hA * (525 / 720), ax = W * 0.5 - wA / 2 + W * 0.02, ay = H * 0.01;
   const waterY = ay + hA * 0.93;
-  const wall = el('abs'); Object.assign(wall.style, { inset: '0', background: 'linear-gradient(#e6f6fb,#d4eef7)', backgroundImage: 'linear-gradient(#e6f6fb,#d4eef7)' }); root.append(wall);
-  const tiles = el('abs'); tiles.innerHTML = `<svg width="${W}" height="${waterY}" style="display:block"><g stroke="#c4e4ef" stroke-width="2" fill="none">${Array.from({ length: Math.ceil(W / 70) + 1 }, (_, i) => `<path d="M${i * 70} 0V${waterY}"/>`).join('')}${Array.from({ length: Math.ceil(waterY / 70) + 1 }, (_, i) => `<path d="M0 ${i * 70}H${W}"/>`).join('')}</g></svg>`;
-  Object.assign(tiles.style, { left: '0', top: '0', width: W + 'px', height: waterY + 'px', opacity: '.8' }); root.append(tiles);
+  root.style.backgroundSize = 'auto 125%'; // the bathroom, a little closer (anchored at the top)
+  const veil = el('abs'); Object.assign(veil.style, { inset: '0', background: 'rgba(230,246,251,.18)', zIndex: '0' }); root.append(veil);
   const img = h('img', { src: asset('avatar/rafael-bath.png'), alt: '', draggable: 'false', 'data-testid': 'bath-boy', style: `position:absolute;left:${ax}px;top:${ay}px;width:${wA}px;height:${hA}px` });
   root.append(img);
   const tubH = H - waterY + 40;
@@ -222,7 +228,8 @@ export const bath: Game = (ctx) => {
     <g>${foam}</g></svg>`);
   Object.assign(tub.style, { left: '0', top: waterY - 20 + 'px', width: W + 'px', height: tubH + 'px', zIndex: '3', pointerEvents: 'none' });
   root.append(tub);
-  const duck = put(el('abs', P.duck()), W * 0.82, waterY + 22, 74); duck.style.animation = 'bob 2.4s ease-in-out infinite'; duck.style.zIndex = '4'; root.append(duck);
+  const duck = put(el('abs', P.duck()), W * 0.82, waterY + 24, 76); duck.style.animation = 'bob 2.4s ease-in-out infinite'; duck.style.zIndex = '4'; root.append(duck);
+  [[0.14, 0], [0.5, 10], [0.86, -4]].forEach(([fx, dy], i) => { const f = put(el('abs', P.foam()), W * fx, waterY + 6 + dy, W * 0.42, W * 0.22); f.style.zIndex = '4'; f.style.transform = i === 1 ? 'scaleX(-1)' : ''; root.append(f); });
   // --- hit zones, as fractions of the cutout (image is 525x720); all five are above the water line
   const at = (fx: number, fy: number): Pt => ({ x: ax + fx * wA, y: ay + fy * hA });
   const parts: Record<string, { pts: Pt[]; id: string }> = {
@@ -233,11 +240,11 @@ export const bath: Game = (ctx) => {
     tummy: { pts: [at(0.64, 0.9)], id: 'g.12.tummy' },
   };
   const keys = Object.keys(parts);
-  const plan = L === 1 ? ['hands', 'head', 'tummy'] : L === 2 ? shuffle([...keys]) : (() => { const o: string[] = []; while (o.length < 7) { const k = keys[Math.floor(Math.random() * keys.length)]; if (k !== o[o.length - 1]) o.push(k); } return o; })();
+  const plan = L === 1 ? ['hands', 'head', 'tummy'] : L === 2 ? shuffle([...keys]) : (() => { const o: string[] = []; while (o.length < 8) { const k = keys[Math.floor(Math.random() * keys.length)]; if (k !== o[o.length - 1]) o.push(k); } return o; })();
   root.dataset.parts = JSON.stringify(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, v.pts])));
   const R = clamp(wA * 0.14, 36, 52);
   const rings = Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, v.pts.map((p) => { const r = put(el('abs'), p.x, p.y, R * 2); Object.assign(r.style, { borderRadius: '50%', border: '5px dashed #fff', background: 'rgba(255,255,255,.2)', opacity: '0', zIndex: '5', pointerEvents: 'none', boxShadow: '0 0 0 2px rgba(47,74,99,.18)' }); r.dataset.part = k; root.append(r); return r; })]));
-  const sponge = el('abs', `<svg viewBox="0 0 100 100" class="prop"><rect x="10" y="22" width="80" height="56" rx="18" fill="#ffe066"/><g fill="#f0c940"><circle cx="30" cy="40" r="5"/><circle cx="56" cy="56" r="5"/><circle cx="70" cy="36" r="4"/></g></svg>`);
+  const sponge = el('abs', P.sponge());
   put(sponge, 0, 0, 90); Object.assign(sponge.style, { opacity: '0', pointerEvents: 'none', zIndex: '7' }); root.append(sponge);
   const stepDots = triesBar(ctx, plan.length, 'bottom'); stepDots(plan.length);
   let i = 0, scrub = 0, wrongDist = 0, lastWrong = 0, tLeft = 9, lx = 0, ly = 0, down = false, gap = true, doneFlag = false; // gap: between parts nothing counts
@@ -247,10 +254,10 @@ export const bath: Game = (ctx) => {
     if (i >= plan.length) return;
     root.dataset.part = plan[i];
     rings[plan[i]].forEach((r) => (r.style.opacity = '1'));
-    ctx.say(cur().id); tLeft = 9; scrub = 0; wrongDist = 0; gap = false;
+    ctx.say(cur().id); tLeft = L === 3 ? 7 : 9; scrub = 0; wrongDist = 0; gap = false;
     ctx.hand(() => { const p = cur().pts[0]; return { kind: 'drag', from: { x: p.x - 28, y: p.y }, to: { x: p.x + 28, y: p.y } }; });
   };
-  const bubbles = (p: Pt) => { for (let k = 0; k < 7; k++) { const b = put(el('abs', P.bubble()), p.x + (Math.random() - 0.5) * 70, p.y + (Math.random() - 0.5) * 40, 28 + Math.random() * 22); b.style.zIndex = '6'; b.style.transition = 'transform 2s ease-out, opacity 2s'; root.append(b); requestAnimationFrame(() => { b.style.transform = `translate(${(Math.random() - 0.5) * 80}px, ${-90 - Math.random() * 60}px)`; b.style.opacity = '0'; }); setTimeout(() => b.remove(), 2100); } };
+  const bubbles = (p: Pt) => { for (let k = 0; k < 7; k++) { const b = put(el('abs', P.bubble()), p.x + (Math.random() - 0.5) * 70, p.y + (Math.random() - 0.5) * 40, 30 + Math.random() * 26); b.style.zIndex = '6'; b.style.transition = 'transform 2s ease-out, opacity 2s'; root.append(b); requestAnimationFrame(() => { b.style.transform = `translate(${(Math.random() - 0.5) * 80}px, ${-90 - Math.random() * 60}px)`; b.style.opacity = '0'; }); setTimeout(() => b.remove(), 2100); } };
   ctx.say('g.12.how'); ctx.later(show, 2200);
   const area = el('abs'); Object.assign(area.style, { inset: '0', zIndex: '6' }); area.dataset.t = '1'; root.append(area);
   drag(area, {
@@ -263,7 +270,7 @@ export const bath: Game = (ctx) => {
       const onTarget = cur().pts.some((p) => Math.hypot(p.x - px, p.y - py) < R + 14);
       if (onTarget) {
         scrub += d; wrongDist = 0;
-        if (scrub > 260) { const p = cur().pts[0]; bubbles(p); sfx.pop(); sfx.sparkle(); ctx.hit(); i++; gap = true; stepDots(plan.length - i); ctx.hand(null); ctx.later(show, 1400); }
+        if (scrub > (L === 3 ? 300 : 260)) { const p = cur().pts[0]; bubbles(p); sfx.good(i); sfx.sparkle(); ctx.hit(); ctx.burst(p.x, p.y, 10); i++; gap = true; stepDots(plan.length - i); ctx.hand(null); ctx.later(show, 1400); }
       } else if (Object.entries(parts).some(([k, v]) => k !== plan[i] && v.pts.some((p) => Math.hypot(p.x - px, p.y - py) < R - 14))) {
         wrongDist += d; if (wrongDist > 160 && performance.now() - lastWrong > 1800) { wrongDist = 0; lastWrong = performance.now(); ctx.mistake(); }
       }
@@ -275,7 +282,7 @@ export const bath: Game = (ctx) => {
     if (L !== 3 || gap) return;
     tLeft -= dt;
     rings[plan[i]].forEach((r) => (r.style.borderColor = tLeft < 3 ? '#ffb870' : '#fff'));
-    if (tLeft <= 0) { tLeft = 9; ctx.mistake(); }
+    if (tLeft <= 0) { tLeft = 7; ctx.mistake(); }
   });
 };
 
@@ -285,10 +292,11 @@ export const sleep: Game = (ctx) => {
   const L = ctx.level;
   const dark = el('abs'); Object.assign(dark.style, { inset: '0', background: '#101a40', opacity: '0', transition: 'opacity 1.6s', pointerEvents: 'none', zIndex: '6' });
   const bw = Math.min(W * 0.8, 330);
-  const bed = put(el('abs', P.bed()), W / 2, H * 0.52, bw, 220);
-  const blanket = put(el('abs'), W / 2 + 28, H * 0.52 + 24, bw * 0.62, 62);
-  Object.assign(blanket.style, { background: '#7fa6e6', borderRadius: '24px', opacity: '0', transition: 'opacity .8s' });
-  root.append(bed, blanket);
+  const bedC = ctx.bgPt(0.3, 0.55);
+  const pil = put(el('abs', P.pillow()), bedC.x - bw * 0.14, bedC.y - 14, 84, 58); pil.style.zIndex = '2'; pil.style.transform = 'rotate(-6deg)';
+  const blanket = put(el('abs'), bedC.x + 28, bedC.y + 20, bw * 0.6, 56);
+  Object.assign(blanket.style, { background: 'rgba(127,166,230,.92)', borderRadius: '24px', opacity: '0', transition: 'opacity .8s', zIndex: '2' });
+  root.append(pil, blanket);
   const nLamps = L === 3 ? 4 : 3, ordered = L >= 2;
   const lamps = Array.from({ length: nLamps }, (_, i) => { const l = put(el('abs', P.lamp(true)), (W / (nLamps + 1)) * (i + 1), H * 0.14, ctx.size(90)); l.dataset.t = '1'; root.append(l); return l; });
   root.append(dark);
@@ -319,16 +327,16 @@ export const sleep: Game = (ctx) => {
     }));
   }
   function tuck(from: Pt) {
-    const tgt = put(el('abs zone glow'), W / 2 - bw * 0.2, H * 0.52 - 6, 130, 90); root.append(tgt); root.append(dark);
+    const tgt = put(el('abs zone glow'), bedC.x - bw * 0.14, bedC.y - 8, 130, 90); root.append(tgt); root.append(dark);
     ctx.say('g.13.teddy');
-    dragItems(ctx, [{ id: 'teddy', html: P.teddy(), size: 100, home: from, onDrop: (c) => (inside(c, tgt, ctx, 50) ? { x: W / 2 - bw * 0.2, y: H * 0.52 - 14 } : null) }], () => {
+    dragItems(ctx, [{ id: 'teddy', html: P.teddy(), size: 100, home: from, onDrop: (c) => (inside(c, tgt, ctx, 50) ? { x: bedC.x - bw * 0.14, y: bedC.y - 16 } : null) }], () => {
       blanket.style.opacity = '1'; sfx.soft(); tgt.remove();
-      const mk = mokaSvg('walking'); const mw = el('abs'); mw.append(mk); put(mw, W * 0.12, H * 0.74, 120, 120); mw.style.transition = 'left 2.2s ease-in-out'; mw.style.zIndex = '7'; root.append(mw);
+      const mk = moka3d('walking'); const mw = el('abs'); mw.append(mk); put(mw, W * 0.12, H * 0.8, 84, 40); mw.style.transition = 'left 2.2s ease-in-out, width 1s'; mw.style.zIndex = '7'; root.append(mw);
       ctx.later(() => { mw.style.left = W / 2 + bw * 0.25 + 'px'; }, 200);
-      ctx.later(() => { setMoka(mk, 'sleepy'); ctx.say('g.13.moka'); }, 2600);
+      ctx.later(() => { setMoka(mk, 'sleepy'); mw.style.width = '120px'; ctx.say('g.13.moka'); }, 2600);
       ctx.later(() => { dark.style.opacity = '0.8'; ctx.win(3); }, 4800);
     });
-    ctx.hand(() => ({ kind: 'drag', from, to: { x: W / 2 - bw * 0.2, y: H * 0.52 - 14 } }));
+    ctx.hand(() => ({ kind: 'drag', from, to: { x: bedC.x - bw * 0.14, y: bedC.y - 16 } }));
   }
   void haptic; void (null as unknown as GameCtx); void swipePop;
 };

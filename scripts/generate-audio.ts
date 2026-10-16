@@ -9,17 +9,14 @@ import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { PHRASES, PHRASE_IDS } from '../src/content/phrases.ts';
 import { api } from './lib-eleven.mjs';
+import { add as ledgerAdd, guard as ledgerGuard, read as ledgerRead, STOP_AT } from './ledger.mjs';
 
 const ROOT = new URL('../', import.meta.url).pathname;
 const RAW = path.join(ROOT, 'audio-work/raw'), OUT = path.join(ROOT, 'public/audio');
-const LEDGER = path.join(ROOT, 'audio-work/ledger.json');
 const CONFIG = JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/voice-config.json'), 'utf8'));
 const NIQQUD: Record<string, string> = fs.existsSync(path.join(ROOT, 'scripts/niqqud.json')) ? JSON.parse(fs.readFileSync(path.join(ROOT, 'scripts/niqqud.json'), 'utf8')) : {};
-const STOP = 8500;
 
 fs.mkdirSync(RAW, { recursive: true }); fs.mkdirSync(OUT, { recursive: true });
-const ledger = fs.existsSync(LEDGER) ? JSON.parse(fs.readFileSync(LEDGER, 'utf8')) : { total: CONFIG.creditsBefore ?? 0, calls: [] };
-const saveLedger = () => fs.writeFileSync(LEDGER, JSON.stringify(ledger, null, 1));
 const manifestPath = path.join(OUT, 'manifest.json');
 const manifest = fs.existsSync(manifestPath) ? JSON.parse(fs.readFileSync(manifestPath, 'utf8')) : { version: 1, clips: {} };
 
@@ -31,12 +28,12 @@ export function ttsText(id: string): string {
 }
 const voiceFor = (speaker: string) => CONFIG[speaker];
 const hashOf = (id: string) => { const v = voiceFor(PHRASES[id].speaker); return crypto.createHash('sha1').update(JSON.stringify([ttsTextFinal(id), v.voice_id, v.model, v.settings, v.tags ?? ''])).digest('hex').slice(0, 12); };
-/** text actually sent (adds the speaker's gentle audio tag if configured, v3/v4 only) */
-function ttsTextFinal(id: string) { const v = voiceFor(PHRASES[id].speaker); return (v.tags ? v.tags + ' ' : '') + ttsText(id); }
+/** text actually sent: the phrase's emotion tag in brackets (v3 audio tag, never shown in the UI) + the pointed text */
+function ttsTextFinal(id: string) { const tag = PHRASES[id].tag; return (tag ? `[${tag}] ` : '') + ttsText(id); }
 
 async function synth(id: string) {
   const ph = PHRASES[id]; const v = voiceFor(ph.speaker); const text = ttsTextFinal(id);
-  if (ledger.total + text.length > STOP) throw new Error(`credit stop: ${ledger.total} used, next clip would pass ${STOP}`);
+  ledgerGuard(text.length); // throws 'credit stop' before the shared ledger passes 28,000
   const body = { text, model_id: v.model, voice_settings: v.settings };
   let r: Response | undefined;
   for (let a = 0; a < 5; a++) {
@@ -48,7 +45,7 @@ async function synth(id: string) {
   const cost = Number(r!.headers.get('character-cost') ?? text.length);
   const dir = path.join(RAW, ph.speaker); fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, id + '.mp3'), Buffer.from(await r!.arrayBuffer()));
-  ledger.total += cost; ledger.calls.push({ id, cost }); saveLedger();
+  ledgerAdd(id, cost);
   return cost;
 }
 
@@ -70,14 +67,14 @@ let force = false;
 if (flagFile) { const f = JSON.parse(fs.readFileSync(flagFile, 'utf8')); ids = (Array.isArray(f) ? f : f.flagged ?? f.ids).map((x: string | { id: string }) => (typeof x === 'string' ? x : x.id)); force = true; }
 
 const todo = ids.filter((id) => force || onlyNormalize || manifest.clips[id]?.hash !== hashOf(id) || !fs.existsSync(path.join(RAW, PHRASES[id].speaker, id + '.mp3')));
-console.log(`${todo.length} of ${ids.length} clips to process; credits so far ${ledger.total}`);
+console.log(`${todo.length} of ${ids.length} clips to process; credits so far ${ledgerRead().total} (stop at ${STOP_AT})`);
 let used = 0;
 const queue = [...todo];
 async function worker() {
   while (queue.length) {
     const id = queue.shift()!;
     try {
-      if (!onlyNormalize) used += await synth(id);
+      if (!onlyNormalize) { const c = await synth(id); used += c; }
       const m = normalize(id);
       manifest.clips[id] = { hash: hashOf(id), speaker: PHRASES[id].speaker, ...m };
       fs.writeFileSync(manifestPath, JSON.stringify(manifest));
@@ -89,4 +86,4 @@ await Promise.all([worker(), worker()]);
 // drop manifest entries for phrases that no longer exist
 for (const id of Object.keys(manifest.clips)) if (!PHRASES[id]) delete manifest.clips[id];
 fs.writeFileSync(manifestPath, JSON.stringify(manifest));
-console.log(`\ndone. credits used this run: ${used}; total ledger: ${ledger.total}; clips in manifest: ${Object.keys(manifest.clips).length}`);
+console.log(`\ndone. credits used this run: ${used}; total ledger: ${ledgerRead().total}; clips in manifest: ${Object.keys(manifest.clips).length}`);

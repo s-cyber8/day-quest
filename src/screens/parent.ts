@@ -6,6 +6,8 @@ import { applyVolume, sfx } from '../core/audio';
 import { speak, stopSpeaking, hasHebrewVoice, testSound, dropRecordingCache, playBundled } from '../core/speech';
 import { resetProg, getProg } from '../core/storage';
 import { currentStation } from './map';
+import { renderInsights } from './insights';
+import { resetStories } from '../core/stories-store';
 
 const WD = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
 const FEEL: Record<string, string> = { calm: 'רגוע', meh: 'בינוני', upset: 'עדיין כועס', left: 'יצא', unknown: '—' };
@@ -23,6 +25,8 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
   const close = () => { stopSpeaking(); saveSettings(); apply(); onClose(); };
 
   root.append(h('div', { class: 'topbtns' }, h('button', { class: 'pbtn on', 'data-testid': 'parent-close', onclick: close }, 'סגירה וחזרה')), h('h1', {}, 'אזור הורים'));
+
+  root.append(h('div', { class: 'topbtns', style: 'margin-bottom:6px' }, h('button', { class: 'pbtn on', 'data-testid': 'open-insights', onclick: () => { const ins = renderInsights(() => {}); root.after(ins); } }, 'מה אנחנו לומדים (הסיפורים)')));
 
   // --- today
   section('היום');
@@ -142,7 +146,7 @@ export function renderParent(onClose: () => void, apply: () => void): HTMLElemen
     b.onclick = () => { if (armed !== key) { armed = key; b.textContent = 'בטוח? לחץ שוב'; setTimeout(() => { if (armed === key) { armed = ''; b.textContent = label; } }, 4000); return; } fn(); close(); };
     return b;
   };
-  root.append(h('div', { class: 'topbtns', style: 'margin-top:14px' }, dangerBtn('איפוס היום', 'today', resetToday, 'reset-today'), dangerBtn('איפוס הכל', 'all', resetEverything, 'reset-all')));
+  root.append(h('div', { class: 'topbtns', style: 'margin-top:14px' }, dangerBtn('איפוס היום', 'today', resetToday, 'reset-today'), dangerBtn('איפוס הכל', 'all', () => { resetEverything(); resetStories(); }, 'reset-all')));
 
   // --- help
   section('עזרה');

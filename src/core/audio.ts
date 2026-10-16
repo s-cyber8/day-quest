@@ -64,6 +64,8 @@ export const sfx = {
   chime(i = 0) { const t = now(); const n = [0, 4, 7, 12][i % 4]; tone(N(n), t, 0.7, 'sine', 0.1); tone(N(n + 12), t, 0.5, 'sine', 0.03); },
   success() { const t = now(); [0, 4, 7, 12].forEach((n, i) => { tone(N(n), t + i * 0.12, 0.8, 'sine', 0.1); tone(N(n) * 2, t + i * 0.12, 0.5, 'triangle', 0.02); }); },
   big() { const t = now(); [0, 4, 7, 12, 16, 19].forEach((n, i) => { tone(N(n, 392), t + i * 0.11, 1.0, 'sine', 0.1); tone(N(n, 392) * 2, t + i * 0.11, 0.6, 'triangle', 0.025); }); },
+  /** layered success: a soft pop with a chime on top */
+  good(i = 0) { const t = now(); tone(420, t, 0.12, 'sine', 0.08, 900); const n = [0, 4, 7, 12][i % 4]; tone(N(n), t + 0.05, 0.6, 'sine', 0.08); tone(N(n + 12), t + 0.05, 0.4, 'sine', 0.025); },
   soft() { const t = now(); tone(N(0, 440), t, 0.5, 'sine', 0.07); tone(N(7, 440), t + 0.15, 0.6, 'sine', 0.06); },
   whoosh() { const t = now(); noise(t, 0.5, 300, 1800, 0.05); },
   place() { const t = now(); tone(300, t, 0.15, 'sine', 0.1, 180); },

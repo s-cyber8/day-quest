@@ -11,6 +11,7 @@ export interface Settings {
   reducedMotion: boolean;
   days: Record<number, number[]>; // weekday (0=Sun) -> active station ids
   startLevel: Record<string, number>; // game key -> 1..3 (default 2)
+  lastWorld: 'day' | 'stories' | ''; // last-used world, highlighted on the home screen
 }
 export interface CalmVisit {
   t: number; auto: boolean; activity: string; before?: string; after: string; medal: boolean; source?: 'rage' | 'misses' | 'fails' | 'self';
@@ -31,7 +32,7 @@ const ALL = Array.from({ length: 13 }, (_, i) => i + 1);
 export const defaultSettings = (): Settings => ({
   volume: 0.7, pin: '', unlock: '06:00',
   rageTaps: 6, rageWindowMs: 1500, missStreak: 3, cooldownMin: 3,
-  reducedMotion: false, startLevel: {},
+  reducedMotion: false, startLevel: {}, lastWorld: '',
   days: { 0: [...ALL], 1: [...ALL], 2: [...ALL], 3: [...ALL], 4: [...ALL], 5: [...ALL], 6: [...ALL] },
 });
 

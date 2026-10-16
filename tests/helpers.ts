@@ -24,7 +24,7 @@ export async function hold(page: Page, l: Locator, ms = 3200) {
 }
 export async function newApp(page: Page) {
   await page.clock.install();
-  await page.goto('./');
+  await page.goto('./?w=day');
   await expect(page.locator('[data-screen=map]')).toBeVisible();
   await adv(page, 600);
 }
@@ -45,7 +45,7 @@ export const stationOf = (game: string) => GAMES.indexOf(game) + 1;
 /** Seed state so that `game` is the current, already-confirmed station at `level`, then open it. */
 export async function openGame(page: Page, game: string, level: number, extra: { prog?: object } = {}) {
   await page.clock.install();
-  await page.goto('./');
+  await page.goto('./?w=day');
   await expect(page.locator('[data-screen=map]')).toBeVisible();
   const id = stationOf(game);
   await page.evaluate(([game, level, id, prog]) => {
@@ -93,17 +93,17 @@ const poll = async (page: Page, cond: () => Promise<boolean>, max = 3000, step =
 export const PASS: Record<string, Fn> = {
   async wake(page, level) {
     if (level === 3) {
-      const seq = await dset(page, 'simon'); await adv(page, 7000);
+      const seq = await dset(page, 'simon'); await adv(page, 8200);
       for (const ch of seq) { await page.getByTestId('pad-' + ch).click(); await adv(page, 300); }
       return;
     }
     await page.getByTestId('w-curtains').click(); await adv(page, 600);
-    if (level === 2) { await page.getByTestId('w-clock').click(); await adv(page, 600); }
+    if (level === 2) { await page.getByTestId('w-clock').click(); await adv(page, 600); await page.getByTestId('w-pillow').click(); await adv(page, 600); }
     await page.getByTestId('w-av').click(); await adv(page, 600);
   },
   async teeth(page) { await adv(page, 600); for (let k = 0; k < 12; k++) { await sweepGerms(page); await adv(page, 1700); if (await page.getByTestId('celebrate').count()) break; } },
   async dress(page) {
-    const order: [string, number][] = [['vest', 0], ['shirt', 0], ['shorts', 1], ['socks', 2], ['shoes', 2]];
+    const order: [string, number][] = [['shirt', 0], ['shorts', 1], ['socks', 2], ['shoes', 2]];
     for (const [id, z] of order) { await adv(page, 1000); await dragItem(page, id, page.locator('.stage .zone').nth(z), 700); }
     await adv(page, 3000);
   },
@@ -119,7 +119,7 @@ export const PASS: Record<string, Fn> = {
       await adv(page, 40); t += 40;
       if (await page.getByTestId('celebrate').count()) return;
       const gap = Number(await dset(page, 'gap')); const sp = Number(await dset(page, 'speed')) || 120;
-      if (gap > 0 && gap <= sp * 0.42 && t - last > 1300) { await page.mouse.click(60, 400); last = t; }
+      if (gap > 0 && gap <= sp * 0.42 && t - last > 1000) { await page.mouse.click(60, 400); last = t; }
     }
   },
   async tower(page) {
@@ -177,8 +177,8 @@ export const PASS: Record<string, Fn> = {
     }
   },
   async dinner(page, level) {
-    const kind: Record<string, number> = { broccoli: 0, carrot: 0, chicken: 1, egg: 1, sweet: 2, rice: 2 };
-    const ids = level === 1 ? ['broccoli', 'chicken', 'sweet'] : ['broccoli', 'carrot', 'chicken', 'egg', 'sweet', 'rice'];
+    const kind: Record<string, number> = { broccoli: 0, apple: 0, banana: 0, chicken: 1, sweet: 2, toast: 2 };
+    const ids = level === 1 ? ['broccoli', 'chicken', 'sweet'] : level === 2 ? ['broccoli', 'apple', 'chicken', 'sweet', 'toast'] : ['broccoli', 'apple', 'banana', 'chicken', 'sweet', 'toast'];
     for (const id of ids) await dragItem(page, id, page.locator('.stage .zone').nth(kind[id]), 500);
     await adv(page, 1500);
     await dragItem(page, 'water', page.locator('.stage .zone.glow').first(), 900);
@@ -215,7 +215,7 @@ export const FAIL: Record<string, Fn> = {
   },
   async dress(page, level) {
     for (let i = 0; i < 7; i++) {
-      const id = level === 1 ? 'vest' : 'shoes';
+      const id = level === 1 ? 'shirt' : 'shoes';
       const it = page.locator(`.stage [data-t][data-id="${id}"]`).first();
       await dragTo(page, await center(it), await center(page.locator('.stage .zone').nth(level === 1 ? 2 : 2))); await adv(page, 700);
       if (await page.getByTestId('retry').or(page.getByTestId('calm-prompt')).count()) return;
@@ -223,19 +223,19 @@ export const FAIL: Record<string, Fn> = {
   },
   async breakfast(page, level) {
     const need = ((await page.locator('[data-need]').getAttribute('data-need')) ?? '').split(',');
-    const bad = (level === 1 ? ['banana', 'egg'] : level === 2 ? ['egg'] : ['juice']).find((x) => !need.includes(x))!;
+    const bad = (level === 1 ? ['banana', 'apple'] : level === 2 ? ['apple'] : ['broccoli']).find((x) => !need.includes(x))!;
     if (level === 3) await adv(page, 5000);
     for (let i = 0; i < 6; i++) { await dragItem(page, bad, page.locator('.stage .zone').first(), 600); if (await page.getByTestId('retry').or(page.getByTestId('calm-prompt')).count()) return; }
   },
   async walk(page) { await adv(page, 70000); },
   async tower(page) {
-    let first = true;
+    let first = true; const bwf = Number(await dset(page, 'bw')) || 0.3; const off = bwf * 0.575; // first block lands clearly off-centre (more than half a block), but still on the tower
     for (let i = 0; i < 6000; i++) {
       await adv(page, 16);
       if (await page.getByTestId('retry').or(page.getByTestId('calm-prompt')).count()) return;
       const s = Number(await dset(page, 'swing'));
       // first block off-centre, every next block dead-centre => the top part keeps toppling
-      if (first ? s > 0.2 && s < 0.23 : Math.abs(s) < 0.03) { await page.mouse.click(60, 300); first = false; await adv(page, 1300); }
+      if (first ? s > off - 0.012 && s < off + 0.012 : Math.abs(s) < 0.03) { await page.mouse.click(60, 300); first = false; await adv(page, 1300); }
     }
   },
   async football(page) {

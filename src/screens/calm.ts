@@ -1,7 +1,7 @@
 // The calm corner: the key feature. Pauses whatever is underneath, offers slow, regulating activities.
 import { h, frag, sleep, clamp } from '../core/dom';
 import { P } from '../art/props';
-import { mokaSvg, setMoka } from '../art/moka';
+import { moka3d, setMoka } from '../art/moka';
 import { asset } from '../content/stations';
 import { sfx, haptic, openMic, Mic } from '../core/audio';
 import { speak, stopSpeaking } from '../core/speech';
@@ -10,6 +10,7 @@ import { day, saveDay, logCalm, settings } from '../core/storage';
 import { confetti, holdButton, overlay } from './ui';
 import { text } from '../content/phrases';
 import { pushBack } from '../core/back';
+import { spr } from '../art/sprites';
 
 export type Feeling = 'calm' | 'meh' | 'upset';
 type Activity = 'water' | 'ball' | 'pet' | 'breath';
@@ -20,7 +21,7 @@ export function offerCalm(opts: { id?: string; keepLabel?: string } = {}): Promi
   const id = opts.id ?? 'calm.offer';
   return new Promise((res) => {
     pauseGame(true);
-    const moka = mokaSvg('concerned');
+    const moka = moka3d('concerned');
     const mk = h('div', { class: 'mokaw' }, moka);
     let popBack = () => {};
     const close = (yes: boolean) => { popBack(); p.remove(); stopSpeaking(); pauseGame(false); res(yes); };
@@ -61,7 +62,7 @@ const photo = (p: string) => h('img', { class: 'photo', src: asset(`calm/${p}.we
 function water(): Promise<void> {
   return new Promise((res) => {
     const prog = progressBar();
-    const box = h('div', { class: 'glassbox', 'data-t': '1', 'data-testid': 'glass' }); box.innerHTML = P.glass(1);
+    const box = h('div', { class: 'glassbox', 'data-t': '1', 'data-testid': 'glass' }); box.innerHTML = P.glassSvg(1);
     const wt = () => box.querySelector('.water') as SVGRectElement;
     host.replaceChildren(photo('drink-water'), box, prog.b);
     speak('calm.water.how');
@@ -106,7 +107,7 @@ function ball(): Promise<void> {
 function pet(): Promise<void> {
   return new Promise((res) => {
     const prog = progressBar();
-    const m = mokaSvg('idle'); const box = h('div', { style: 'width:min(60vw,250px);touch-action:none', 'data-t': '1', 'data-testid': 'pet' }, m);
+    const m = moka3d('idle'); const box = h('div', { style: 'width:min(40vw,160px);touch-action:none', 'data-t': '1', 'data-testid': 'pet' }, m);
     host.replaceChildren(photo('pet-the-dog'), box, prog.b);
     speak('calm.pet.how');
     let calm = 0, lx = 0, ly = 0, lt = 0, speed = 0, down = false, lastSlowAt = 0, lastWarn = -9, slowFor = 0, stop = () => {};
@@ -122,20 +123,19 @@ function pet(): Promise<void> {
       if (down) speed *= 0.97;
       const moving = down && speed > 15;
       if (moving && speed > 650) { // too fast
-        slowFor = 0; setMoka(m, 'concerned', 'open');
+        slowFor = 0; setMoka(m, 'idle'); m.classList.add('startled'); setTimeout(() => m.classList.remove('startled'), 400);
         if (now - lastWarn > 5) { lastWarn = now; speak('calm.pet.slow'); }
       } else if (moving) { // slow & gentle
         slowFor += dt; lastSlowAt = now;
-        if (slowFor > 0.6) { setMoka(m, 'happy', 'closed'); calm += dt; prog.set(calm / 14); }
-      } else if (now - lastSlowAt > 1.2) { slowFor = 0; if (m.dataset.state !== 'idle') setMoka(m, 'idle', 'open'); }
-      if (calm >= 14) { stop(); setMoka(m, 'happy', 'closed'); setTimeout(res, 1200); return true; }
+        if (slowFor > 0.6) { setMoka(m, 'happy'); calm += dt; prog.set(calm / 14); }
+      } else if (now - lastSlowAt > 1.2) { slowFor = 0; if (m.dataset.state !== 'idle') setMoka(m, 'idle'); }
+      if (calm >= 14) { stop(); setMoka(m, 'sleepy'); setTimeout(res, 1400); return true; }
     });
   });
 }
 
-function breath(): Promise<void> {
+function breath(CYCLES = 4): Promise<void> {
   return new Promise(async (res) => {
-    const CYCLES = 4;
     const prog = progressBar();
     const ring = h('div', { class: 'breathring' });
     const bal = h('div', { style: 'width:150px;height:190px;transition:transform .3s;transform-origin:50% 100%;position:relative;z-index:2' }); bal.innerHTML = P.balloon('#ff9bb3');
@@ -219,8 +219,8 @@ function bridge(a: Activity): Promise<void> {
 
 async function medalCelebration(a: Activity) {
   const c = h('div', { class: 'celebrate', 'data-testid': 'medal', style: 'z-index:5' });
-  const med = frag(P.medal()); med.classList.add('bigstar'); (med as unknown as HTMLElement).style.width = '170px'; (med as unknown as HTMLElement).style.height = '170px';
-  c.append(med, h('div', { class: 'title' }, text('calm.medal')), h('div', { style: 'width:150px' }, mokaSvg('happy')));
+  const med = frag(spr('rewards', 'calm-medal')); med.classList.add('bigstar'); (med as unknown as HTMLElement).style.width = '170px'; (med as unknown as HTMLElement).style.height = '170px';
+  c.append(med, h('div', { class: 'title' }, text('calm.medal')), h('div', { style: 'width:150px' }, moka3d('happy')));
   confetti(c, 30); host.parentElement!.append(c);
   sfx.big(); haptic([30, 60, 30]); speak('calm.medal');
   day.medals.push({ id: `${Date.now()}`, activity: a, t: Date.now() }); saveDay();
@@ -237,7 +237,7 @@ const guarded = <T,>(p: Promise<T>): Promise<T | typeof ABORT> => Promise.race([
 /** Open the calm corner. Resolves when he returns to where he left off (also via the back button). */
 export async function openCalm(auto: boolean, source: 'rage' | 'misses' | 'fails' | 'self' = auto ? 'rage' : 'self'): Promise<void> {
   pauseGame(true); alive = true;
-  mokaEl = mokaSvg('idle');
+  mokaEl = moka3d('idle');
   host = h('div', { class: 'act' });
   const root = h('div', { class: 'calm', 'data-testid': 'calm' }, h('div', { class: 'mokac' }, mokaEl), host);
   document.body.append(root);
@@ -268,4 +268,19 @@ export async function openCalm(auto: boolean, source: 'rage' | 'misses' | 'fails
     stopSpeaking(); popBack(); root.remove(); pauseGame(false);
   }
   void settings;
+}
+
+/** One real calm-corner breath (microphone balloon, or the hold-to-breathe fallback) shown inside a story. */
+export async function runCalmBreath(cycles = 1): Promise<void> {
+  pauseGame(true); alive = true;
+  mokaEl = moka3d('idle');
+  host = h('div', { class: 'act' });
+  const root = h('div', { class: 'calm', 'data-testid': 'calm-breath' }, h('div', { class: 'mokac' }, mokaEl), host);
+  document.body.append(root);
+  const popBack = pushBack(() => abortNow?.());
+  speak('calm.welcome');
+  try { await guarded(breath(cycles)); } finally {
+    alive = false; abortNow = null; activeMic?.stop(); activeMic = null;
+    stopSpeaking(); popBack(); root.remove(); pauseGame(false);
+  }
 }

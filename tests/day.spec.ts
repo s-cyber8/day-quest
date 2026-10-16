@@ -6,8 +6,9 @@ test.describe.configure({ mode: 'serial' });
 
 test('full day: 13 stations, parent confirms, mini-games, night mode', async ({ page }, info) => {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
+  const benign = /access control checks|Load failed/; // WebKit reports fetches aborted by the test's own reload
+  page.on('pageerror', (e) => !benign.test(e.message) && errors.push(e.message));
+  page.on('console', (m) => m.type() === 'error' && !benign.test(m.text()) && errors.push(m.text()));
   await newApp(page);
   await shot(page, info, '01-map-start');
   for (const s of STATIONS) {
@@ -123,7 +124,7 @@ test('calm corner: rage taps -> prompt -> activities -> feelings -> bridge -> me
 
 test('offline after first load + layout checks + RTL', async ({ page, context, browserName }, info) => {
   test.skip(browserName === 'webkit', 'Playwright WebKit cannot emulate offline with service workers; verified on Chromium + live URL');
-  await page.goto('./');
+  await page.goto('./?w=day');
   await page.evaluate(() => navigator.serviceWorker.ready.then(() => true));
   await page.waitForTimeout(1500);
   await context.setOffline(true);
@@ -187,7 +188,7 @@ test.describe('speech fallbacks', () => {
         cancel() {}, addEventListener() {},
       } });
     });
-    await page.goto('./');
+    await page.goto('./?w=day');
     await page.waitForTimeout(800);
     await page.getByTestId('node-1').click();
     await page.waitForTimeout(500);

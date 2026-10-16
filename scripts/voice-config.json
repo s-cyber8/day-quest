@@ -1,7 +1,7 @@
 {
-  "creditsBefore": 2796,
+  "note": "v2 (stories update): model eleven_v3, stability 0.3, similarity 0.8, speaker boost on. Voices chosen by scripts/audition/cer-results-v2.md. Emotion tags come per phrase from src/content/phrases.ts (tag field) and are sent to TTS only.",
   "narrator": { "voice_id": "yF857S2adXNg7ozdQ96e", "name": "tami1 (native Hebrew)", "model": "eleven_v3",
-    "settings": { "stability": 0.5, "similarity_boost": 0.9, "style": 0, "use_speaker_boost": true } },
-  "moka": { "voice_id": "hpp4J3VqNfWAUOO0d1Us", "name": "Bella (premade)", "model": "eleven_v3",
-    "settings": { "stability": 0.5, "similarity_boost": 0.9, "style": 0, "use_speaker_boost": true } }
+    "settings": { "stability": 0.3, "similarity_boost": 0.8, "style": 0, "use_speaker_boost": true } },
+  "moka": { "voice_id": "UZzDIQRRTW2Id7YBcbgC", "name": "Maya - Cheerful, Friendly Creator (native Hebrew)", "model": "eleven_v3",
+    "settings": { "stability": 0.3, "similarity_boost": 0.8, "style": 0, "use_speaker_boost": true } }
 }
